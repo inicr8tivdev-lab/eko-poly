@@ -64,15 +64,27 @@ function RoomPage() {
   const { code } = Route.useParams();
   const { user } = Route.useRouteContext();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const roomState = useQuery(roomQuery(code));
   const room = roomState.data ?? null;
   useLiveRoom(room, code);
 
   useEffect(() => {
-    if (roomState.isError && isAuthFailure(roomState.error)) {
-      void navigate({ to: "/auth", search: { redirect: `/room/${code}` }, replace: true });
-    }
-  }, [roomState.isError, roomState.error, code, navigate]);
+    if (!roomState.isError || !isAuthFailure(roomState.error)) return;
+    let active = true;
+    void supabase.auth.refreshSession().then(async ({ data, error }) => {
+      if (!active) return;
+      if (!error && data.session) {
+        void queryClient.invalidateQueries({ queryKey: ["room", code] });
+        return;
+      }
+      await supabase.auth.signOut().catch(() => {});
+      if (active) void navigate({ to: "/auth", search: { redirect: `/room/${code}` }, replace: true });
+    });
+    return () => {
+      active = false;
+    };
+  }, [roomState.isError, roomState.error, code, navigate, queryClient]);
 
   if (roomState.isLoading && !roomState.data) {
     return (

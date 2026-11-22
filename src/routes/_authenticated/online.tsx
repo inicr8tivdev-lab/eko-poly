@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { OnlineHeader } from "@/components/online/OnlineHeader";
+import { supabase } from "@/integrations/supabase/client";
 import { loadSavedAvatar, saveLocalAvatar } from "@/lib/avatar";
 import { isAuthFailure, isMissingSchemaError, myAvatarQuery, myNameQuery, myRoomsQuery } from "@/lib/room-queries";
 import { CODE_LENGTH, normalizeCode } from "@/lib/rooms";
@@ -59,10 +60,21 @@ function OnlinePage() {
     setAvatar((prev) => prev ?? savedAvatar ?? local ?? null);
   }, [savedAvatar]);
   useEffect(() => {
-    if (roomsQuery.isError && isAuthFailure(roomsQuery.error)) {
-      void navigate({ to: "/auth", search: { redirect: "/online" }, replace: true });
-    }
-  }, [roomsQuery.isError, roomsQuery.error, navigate]);
+    if (!roomsQuery.isError || !isAuthFailure(roomsQuery.error)) return;
+    let active = true;
+    void supabase.auth.refreshSession().then(async ({ data, error }) => {
+      if (!active) return;
+      if (!error && data.session) {
+        void queryClient.invalidateQueries({ queryKey: ["my-rooms"] });
+        return;
+      }
+      await supabase.auth.signOut().catch(() => {});
+      if (active) void navigate({ to: "/auth", search: { redirect: "/online" }, replace: true });
+    });
+    return () => {
+      active = false;
+    };
+  }, [roomsQuery.isError, roomsQuery.error, navigate, queryClient]);
 
   const create = useServerFn(createRoom);
   const join = useServerFn(joinRoom);
@@ -78,6 +90,17 @@ function OnlinePage() {
 
   const go = (c: string) => navigate({ to: "/room/$code", params: { code: c } });
 
+  const handleUnauthorizedError = async (fallbackToast: string) => {
+    const { data, error } = await supabase.auth.refreshSession().catch(() => ({ data: { session: null }, error: new Error("refresh failed") }));
+    if (!error && data.session) {
+      toast.error(fallbackToast);
+      return;
+    }
+    await supabase.auth.signOut().catch(() => {});
+    toast.error("Your session expired — please sign in again.");
+    void navigate({ to: "/auth", search: { redirect: "/online" }, replace: true });
+  };
+
   const createM = useMutation({
     mutationFn: () => create({ data: { name, maxRounds: length, avatar } }),
     onSuccess: (r) => {
@@ -88,8 +111,7 @@ function OnlinePage() {
       console.error("createRoom error", err);
       const msg = err instanceof Error ? err.message : "";
       if (msg.toLowerCase().includes("unauthorized")) {
-        toast.error("Your session expired — please sign in again.");
-        void navigate({ to: "/auth", search: { redirect: "/online" } });
+        void handleUnauthorizedError("Couldn't verify your request with the server — please try again.");
         return;
       }
       toast.error("Could not create the room. Please try again.");
@@ -105,8 +127,7 @@ function OnlinePage() {
       console.error("joinRoom error", err);
       const msg = err instanceof Error ? err.message : "";
       if (msg.toLowerCase().includes("unauthorized")) {
-        toast.error("Your session expired — please sign in again.");
-        void navigate({ to: "/auth", search: { redirect: "/online" } });
+        void handleUnauthorizedError("Couldn't verify your request with the server — please try again.");
         return;
       }
       toast.error("Could not join the room. Please try again.");

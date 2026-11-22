@@ -58,8 +58,9 @@ export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server
       throw new Error('Unauthorized: Invalid token');
     }
 
-    const SUPABASE_URL = process.env['SUPABASE_URL'];
-    const SUPABASE_PUBLISHABLE_KEY = process.env['SUPABASE_PUBLISHABLE_KEY'];
+    const SUPABASE_URL = import.meta.env['VITE_SUPABASE_URL'] || process.env['SUPABASE_URL'];
+    const SUPABASE_PUBLISHABLE_KEY =
+      import.meta.env['VITE_SUPABASE_PUBLISHABLE_KEY'] || process.env['SUPABASE_PUBLISHABLE_KEY'];
 
     type SupabaseClaims = NonNullable<
       Awaited<ReturnType<ReturnType<typeof createClient<Database>>['auth']['getClaims']>>['data']
@@ -99,7 +100,18 @@ export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server
     );
 
     const { data, error } = await supabase.auth.getClaims(token);
-    if (error || !data?.claims) {
+    let claims = data?.claims;
+    if (error || !claims) {
+      const { data: userData, error: userErr } = await supabase.auth.getUser(token);
+      if (!userErr && userData.user?.id) {
+        claims = {
+          sub: userData.user.id,
+          email: userData.user.email,
+        } as unknown as SupabaseClaims;
+      }
+    }
+
+    if (!claims) {
       const { createLocalDbClient, verifyLocalToken } = await import('@/lib/local-online-store.server');
       const localUser = verifyLocalToken(token);
       if (localUser) {
@@ -111,18 +123,19 @@ export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server
           },
         });
       }
+      console.warn('requireSupabaseAuth: rejected token', error?.message);
       throw new Error('Unauthorized: Invalid token');
     }
 
-    if (!data.claims.sub) {
+    if (!claims.sub) {
       throw new Error('Unauthorized: No user ID found in token');
     }
 
     return next({
       context: {
         supabase,
-        userId: data.claims.sub,
-        claims: data.claims,
+        userId: claims.sub,
+        claims,
       },
     });
   },

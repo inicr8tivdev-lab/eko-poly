@@ -32,14 +32,17 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
 import { createLocalDbClient } from '@/lib/local-online-store.server';
 
 export function isSupabaseAdminConfigured(): boolean {
-  return Boolean(process.env['SUPABASE_URL'] && process.env['SUPABASE_SERVICE_ROLE_KEY']);
+  const url = process.env['SUPABASE_URL'];
+  const viteUrl = import.meta.env['VITE_SUPABASE_URL'];
+  if (viteUrl && url && viteUrl !== url) return false;
+  return Boolean((viteUrl || url) && process.env['SUPABASE_SERVICE_ROLE_KEY']);
 }
 
 function createSupabaseAdminClient() {
-  const SUPABASE_URL = process.env['SUPABASE_URL'];
+  const SUPABASE_URL = import.meta.env['VITE_SUPABASE_URL'] || process.env['SUPABASE_URL'];
   const SUPABASE_SERVICE_ROLE_KEY = process.env['SUPABASE_SERVICE_ROLE_KEY'];
 
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  if (!isSupabaseAdminConfigured() || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     return createLocalDbClient() as unknown as ReturnType<typeof createClient<Database>>;
   }
 

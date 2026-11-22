@@ -27,12 +27,16 @@ function isLocalContext(claims: unknown): boolean {
   );
 }
 
+function isRemoteSupabaseEnv(): boolean {
+  return Boolean(import.meta.env["VITE_SUPABASE_URL"] || process.env["SUPABASE_URL"]);
+}
+
 async function admin(fallback?: unknown, claims?: unknown) {
   if (isLocalContext(claims) && fallback) {
     return fallback as Awaited<typeof import("@/integrations/supabase/client.server")>["supabaseAdmin"];
   }
   const { isSupabaseAdminConfigured, supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  if (!isSupabaseAdminConfigured() && process.env["SUPABASE_URL"] && fallback) {
+  if (!isSupabaseAdminConfigured() && isRemoteSupabaseEnv() && fallback) {
     return fallback as typeof supabaseAdmin;
   }
   return supabaseAdmin;
@@ -58,7 +62,7 @@ async function saveAvatarIfLocal(
 ) {
   if (avatar === undefined) return;
   const { isSupabaseAdminConfigured } = await import("@/integrations/supabase/client.server");
-  if (!isLocalContext(claims) && (isSupabaseAdminConfigured() || process.env["SUPABASE_URL"])) return;
+  if (!isLocalContext(claims) && (isSupabaseAdminConfigured() || isRemoteSupabaseEnv())) return;
   const { setLocalProfileAvatar, setLocalRoomPlayerAvatar } = await import("./local-online-store.server");
   if (gameId) setLocalRoomPlayerAvatar(userId, gameId, avatar);
   else setLocalProfileAvatar(userId, avatar);
@@ -212,7 +216,7 @@ export const startRoom = createServerFn({ method: "POST" })
     }
     let avatars: Record<string, string | null> = {};
     const { isSupabaseAdminConfigured } = await import("@/integrations/supabase/client.server");
-    if (isLocalContext(context.claims) || (!isSupabaseAdminConfigured() && !process.env["SUPABASE_URL"])) {
+    if (isLocalContext(context.claims) || (!isSupabaseAdminConfigured() && !isRemoteSupabaseEnv())) {
       const { getLocalRoomPlayerAvatars } = await import("./local-online-store.server");
       avatars = getLocalRoomPlayerAvatars(game.id);
     }
@@ -348,7 +352,7 @@ export const getMyProfileAvatar = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { isSupabaseAdminConfigured } = await import("@/integrations/supabase/client.server");
-    if (!isLocalContext(context.claims) && (isSupabaseAdminConfigured() || process.env["SUPABASE_URL"])) return null;
+    if (!isLocalContext(context.claims) && (isSupabaseAdminConfigured() || isRemoteSupabaseEnv())) return null;
     const { getLocalProfileAvatar } = await import("./local-online-store.server");
     return getLocalProfileAvatar(context.userId);
   });
