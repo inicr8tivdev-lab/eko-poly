@@ -75,7 +75,7 @@ export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server
         context: {
           supabase: createLocalDbClient(localUser.id) as unknown as ReturnType<typeof createClient<Database>>,
           userId: localUser.id,
-          claims: { sub: localUser.id, email: localUser.email } as unknown as SupabaseClaims,
+          claims: { sub: localUser.id, email: localUser.email, iss: 'ekopoly-local' } as unknown as SupabaseClaims,
         },
       });
     }
@@ -100,6 +100,17 @@ export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server
 
     const { data, error } = await supabase.auth.getClaims(token);
     if (error || !data?.claims) {
+      const { createLocalDbClient, verifyLocalToken } = await import('@/lib/local-online-store.server');
+      const localUser = verifyLocalToken(token);
+      if (localUser) {
+        return next({
+          context: {
+            supabase: createLocalDbClient(localUser.id) as unknown as ReturnType<typeof createClient<Database>>,
+            userId: localUser.id,
+            claims: { sub: localUser.id, email: localUser.email, iss: 'ekopoly-local' } as unknown as SupabaseClaims,
+          },
+        });
+      }
       throw new Error('Unauthorized: Invalid token');
     }
 

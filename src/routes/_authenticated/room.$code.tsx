@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, Copy, Crown, Loader2, LogOut, Play, Share2 } from "lucide-react";
@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { tokenOf, type Action } from "@/game/engine";
 import { loadSavedAvatar, saveLocalAvatar } from "@/lib/avatar";
 import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
-import { myAvatarQuery, myNameQuery, roomQuery, type Room } from "@/lib/room-queries";
+import { isAuthFailure, isMissingSchemaError, myAvatarQuery, myNameQuery, roomQuery, type Room } from "@/lib/room-queries";
 import { MAX_PLAYERS, MIN_PLAYERS, normalizeCode } from "@/lib/rooms";
 import { endRoom, joinRoom, leaveRoom, sendMove, startRoom, updateMyAvatar } from "@/lib/rooms.functions";
 import { cn } from "@/lib/utils";
@@ -36,9 +36,9 @@ export const Route = createFileRoute("/_authenticated/room/$code")({
     ],
   }),
   loader: ({ context, params }) => {
-    void context.queryClient.ensureQueryData(myNameQuery(context.user.id));
-    void context.queryClient.ensureQueryData(myAvatarQuery(context.user.id));
-    return context.queryClient.ensureQueryData(roomQuery(params.code));
+    void context.queryClient.prefetchQuery(myNameQuery(context.user.id));
+    void context.queryClient.prefetchQuery(myAvatarQuery(context.user.id));
+    void context.queryClient.prefetchQuery(roomQuery(params.code));
   },
   component: RoomPage,
 });
@@ -63,8 +63,55 @@ function useLiveRoom(room: Room | null, code: string) {
 function RoomPage() {
   const { code } = Route.useParams();
   const { user } = Route.useRouteContext();
-  const { data: room } = useSuspenseQuery(roomQuery(code));
+  const navigate = useNavigate();
+  const roomState = useQuery(roomQuery(code));
+  const room = roomState.data ?? null;
   useLiveRoom(room, code);
+
+  useEffect(() => {
+    if (roomState.isError && isAuthFailure(roomState.error)) {
+      void navigate({ to: "/auth", search: { redirect: `/room/${code}` }, replace: true });
+    }
+  }, [roomState.isError, roomState.error, code, navigate]);
+
+  if (roomState.isLoading && !roomState.data) {
+    return (
+      <div className="min-h-screen">
+        <OnlineHeader />
+        <main className="mx-auto flex max-w-sm flex-col items-center justify-center px-4 py-16 text-center">
+          <Loader2 className="size-6 animate-spin text-primary" />
+          <p className="mt-3 text-sm text-muted-foreground">Loading room {code}…</p>
+        </main>
+      </div>
+    );
+  }
+
+  if (roomState.isError) {
+    const missingSchema = isMissingSchemaError(roomState.error);
+    return (
+      <div className="min-h-screen">
+        <OnlineHeader />
+        <main className="mx-auto max-w-sm px-4 py-16 text-center">
+          <h1 className="font-display text-2xl font-black">
+            {missingSchema ? "Database setup needed" : "Couldn't load this room"}
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {missingSchema
+              ? "Run the Supabase SQL schema in your project's SQL Editor before joining online rooms."
+              : "Something went wrong reaching the room. Try again or head back to rooms."}
+          </p>
+          <div className="mt-6 flex justify-center gap-2">
+            <Button variant="danfo" onClick={() => void roomState.refetch()}>
+              Try again
+            </Button>
+            <Button variant="secondary" asChild>
+              <Link to="/online">Back to rooms</Link>
+            </Button>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   if (!room) return <JoinRoom code={code} userId={user.id} />;
   const me = room.players.find((p) => p.user_id === user.id);
@@ -74,10 +121,11 @@ function RoomPage() {
 }
 
 function JoinRoom({ code, userId }: { code: string; userId: string }) {
-  const { data: savedName } = useSuspenseQuery(myNameQuery(userId));
-  const { data: savedAvatar } = useSuspenseQuery(myAvatarQuery(userId));
+  const { data: savedName = "" } = useQuery(myNameQuery(userId));
+  const { data: savedAvatar } = useQuery(myAvatarQuery(userId));
   const [name, setName] = useState(savedName);
   const [avatar, setAvatar] = useState<string | null>(savedAvatar ?? null);
+  useEffect(() => setName((n) => n || savedName), [savedName]);
   useEffect(() => {
     const local = loadSavedAvatar();
     setAvatar((prev) => prev ?? savedAvatar ?? local ?? null);

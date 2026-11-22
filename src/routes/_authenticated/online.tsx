@@ -1,8 +1,8 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useMutation, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
-import { ArrowRight, Loader2, LogIn, Plus, Users } from "lucide-react";
+import { AlertCircle, ArrowRight, Loader2, LogIn, Plus, RefreshCw, Users } from "lucide-react";
 import { toast } from "sonner";
 import { AvatarPicker } from "@/components/game/AvatarPicker";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { OnlineHeader } from "@/components/online/OnlineHeader";
 import { loadSavedAvatar, saveLocalAvatar } from "@/lib/avatar";
-import { myAvatarQuery, myNameQuery, myRoomsQuery } from "@/lib/room-queries";
+import { isAuthFailure, isMissingSchemaError, myAvatarQuery, myNameQuery, myRoomsQuery } from "@/lib/room-queries";
 import { CODE_LENGTH, normalizeCode } from "@/lib/rooms";
 import { createRoom, joinRoom, updateMyAvatar } from "@/lib/rooms.functions";
 import { cn } from "@/lib/utils";
@@ -34,9 +34,9 @@ export const Route = createFileRoute("/_authenticated/online")({
     ],
   }),
   loader: ({ context }) => {
-    void context.queryClient.ensureQueryData(myRoomsQuery());
-    void context.queryClient.ensureQueryData(myAvatarQuery(context.user.id));
-    return context.queryClient.ensureQueryData(myNameQuery(context.user.id));
+    void context.queryClient.prefetchQuery(myRoomsQuery(context.user.id));
+    void context.queryClient.prefetchQuery(myAvatarQuery(context.user.id));
+    void context.queryClient.prefetchQuery(myNameQuery(context.user.id));
   },
   component: OnlinePage,
 });
@@ -45,9 +45,10 @@ function OnlinePage() {
   const { user } = Route.useRouteContext();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { data: savedName } = useSuspenseQuery(myNameQuery(user.id));
-  const { data: savedAvatar } = useSuspenseQuery(myAvatarQuery(user.id));
-  const { data: rooms } = useSuspenseQuery(myRoomsQuery());
+  const { data: savedName = "" } = useQuery(myNameQuery(user.id));
+  const { data: savedAvatar } = useQuery(myAvatarQuery(user.id));
+  const roomsQuery = useQuery(myRoomsQuery(user.id));
+  const rooms = roomsQuery.data ?? [];
   const [name, setName] = useState(savedName);
   const [avatar, setAvatar] = useState<string | null>(savedAvatar ?? null);
   const [length, setLength] = useState<number | null>(30);
@@ -57,6 +58,11 @@ function OnlinePage() {
     const local = loadSavedAvatar();
     setAvatar((prev) => prev ?? savedAvatar ?? local ?? null);
   }, [savedAvatar]);
+  useEffect(() => {
+    if (roomsQuery.isError && isAuthFailure(roomsQuery.error)) {
+      void navigate({ to: "/auth", search: { redirect: "/online" }, replace: true });
+    }
+  }, [roomsQuery.isError, roomsQuery.error, navigate]);
 
   const create = useServerFn(createRoom);
   const join = useServerFn(joinRoom);
@@ -107,6 +113,8 @@ function OnlinePage() {
     },
   });
 
+  const missingSchema = roomsQuery.isError && isMissingSchemaError(roomsQuery.error);
+
   return (
     <div className="min-h-screen">
       <OnlineHeader />
@@ -115,6 +123,22 @@ function OnlinePage() {
         <p className="mt-2 text-muted-foreground">
           Make a private room, send the code to your people, and everyone plays from their own phone.
         </p>
+
+        {missingSchema && (
+          <div className="mt-6 flex items-start gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+            <AlertCircle className="mt-0.5 size-4 shrink-0 text-amber-400" />
+            <div className="flex-1">
+              <p className="font-semibold text-foreground">Supabase tables not initialized yet</p>
+              <p className="mt-1 text-muted-foreground">
+                This Supabase project does not have the <code>games</code>, <code>game_players</code>, <code>profiles</code>, or{" "}
+                <code>game_results</code> tables yet. Run the schema SQL in your Supabase SQL Editor, then refresh.
+              </p>
+            </div>
+            <Button variant="secondary" size="sm" onClick={() => void roomsQuery.refetch()}>
+              <RefreshCw className="size-3.5" /> Retry
+            </Button>
+          </div>
+        )}
 
         <div className="mt-6 rounded-2xl border border-border bg-card p-5">
           <Label htmlFor="name" className="font-display text-xs font-bold uppercase tracking-widest">
@@ -211,6 +235,15 @@ function OnlinePage() {
           </section>
         </div>
 
+        {roomsQuery.isError && !missingSchema && !isAuthFailure(roomsQuery.error) && (
+          <div className="mt-6 flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm">
+            <span className="text-muted-foreground">Couldn't load your active rooms right now.</span>
+            <Button variant="secondary" size="sm" onClick={() => void roomsQuery.refetch()}>
+              Try again
+            </Button>
+          </div>
+        )}
+
         {rooms.length > 0 && (
           <section className="mt-8">
             <h2 className="font-display text-sm font-bold uppercase tracking-widest text-muted-foreground">Your rooms</h2>
@@ -224,7 +257,7 @@ function OnlinePage() {
                   >
                     <span className="font-mono text-base tracking-widest text-primary">{r.code}</span>
                     <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
-                      {r.game_players.map((p) => p.display_name).join(", ")}
+                      {(r.game_players ?? []).map((p) => p.display_name).join(", ")}
                     </span>
                     <span
                       className={cn(

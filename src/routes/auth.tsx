@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { AuthButtons } from "@/components/auth/AuthButtons";
@@ -14,6 +14,23 @@ const NEXT_KEY = "ekopoly-after-sign-in";
 /** Only same-site paths, so a link can't bounce someone to another website after sign-in. */
 function safePath(p: unknown): string | undefined {
   return typeof p === "string" && p.startsWith("/") && !p.startsWith("//") ? p : undefined;
+}
+
+function readNextPath(): string | undefined {
+  try {
+    return safePath(sessionStorage.getItem(NEXT_KEY));
+  } catch {
+    return undefined;
+  }
+}
+
+function writeNextPath(value: string | null) {
+  try {
+    if (value) sessionStorage.setItem(NEXT_KEY, value);
+    else sessionStorage.removeItem(NEXT_KEY);
+  } catch {
+    // ignore storage errors in restricted contexts
+  }
 }
 
 export const Route = createFileRoute("/auth")({
@@ -42,53 +59,70 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [checkEmail, setCheckEmail] = useState(false);
+  const [hasOAuthButtons, setHasOAuthButtons] = useState(false);
+  const navigatedRef = useRef(false);
 
-  const finish = () => {
-    const stored = safePath(sessionStorage.getItem(NEXT_KEY));
-    sessionStorage.removeItem(NEXT_KEY);
+  const finish = useCallback(() => {
+    if (navigatedRef.current) return;
+    navigatedRef.current = true;
+    const stored = readNextPath();
+    writeNextPath(null);
     void navigate({ to: redirect ?? stored ?? "/online", replace: true });
-  };
+  }, [navigate, redirect]);
 
   // Remember where to go for sign-ins that leave the page (Google / Lovable), and skip ahead if already signed in.
   useEffect(() => {
-    if (redirect) sessionStorage.setItem(NEXT_KEY, redirect);
-    let done = false;
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user && !done) finish();
-    });
+    if (redirect) writeNextPath(redirect);
+    let active = true;
+    supabase.auth
+      .getUser()
+      .then(({ data }) => {
+        if (active && data.user) finish();
+      })
+      .catch(() => {});
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" && session && !done) {
-        done = true;
+      if (event === "SIGNED_IN" && session && active) {
         finish();
       }
     });
     return () => {
-      done = true;
+      active = false;
       data.subscription.unsubscribe();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [finish, redirect]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    if (mode === "signin") {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+    try {
+      if (mode === "signin") {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) {
+          toast.error(error.message === "Invalid login credentials" ? "Wrong email or password." : error.message);
+          return;
+        }
+        if (data.session) finish();
+        return;
+      }
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: `${window.location.origin}/auth` },
+      });
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      if (data.session) {
+        finish();
+        return;
+      }
+      setCheckEmail(true);
+    } catch {
+      toast.error("Could not reach the sign-in service. Please try again.");
+    } finally {
       setBusy(false);
-      if (error) toast.error(error.message === "Invalid login credentials" ? "Wrong email or password." : error.message);
-      return;
     }
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { emailRedirectTo: `${window.location.origin}/auth` },
-    });
-    setBusy(false);
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    if (!data.session) setCheckEmail(true);
   };
 
   return (
@@ -110,12 +144,14 @@ function AuthPage() {
           ) : (
             <>
               <div className="mt-6">
-                <AuthButtons onSignedIn={finish} />
+                <AuthButtons onSignedIn={finish} onAvailabilityChange={setHasOAuthButtons} />
               </div>
-              <div className="my-5 flex items-center gap-3 text-xs uppercase tracking-widest text-muted-foreground">
-                <span className="h-px flex-1 bg-border" /> or <span className="h-px flex-1 bg-border" />
-              </div>
-              <form onSubmit={submit} className="grid gap-3">
+              {hasOAuthButtons && (
+                <div className="my-5 flex items-center gap-3 text-xs uppercase tracking-widest text-muted-foreground">
+                  <span className="h-px flex-1 bg-border" /> or <span className="h-px flex-1 bg-border" />
+                </div>
+              )}
+              <form onSubmit={submit} className={hasOAuthButtons ? "grid gap-3" : "mt-6 grid gap-3"}>
                 <div className="grid gap-1.5">
                   <Label htmlFor="email">Email</Label>
                   <Input id="email" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />

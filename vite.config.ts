@@ -7,7 +7,29 @@
 // the build fails. Never add compression (compressPublicAssets, vite-plugin-compression):
 // hosting already compresses at the edge.
 // You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
+import fs from "node:fs";
+import path from "node:path";
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
+
+function applyLocalEnvOverrides() {
+  const envLocalPath = path.resolve(process.cwd(), ".env.local");
+  if (!fs.existsSync(envLocalPath)) return;
+  const content = fs.readFileSync(envLocalPath, "utf8");
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const eq = line.indexOf("=");
+    if (eq <= 0) continue;
+    const key = line.slice(0, eq).trim();
+    let value = line.slice(eq + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    process.env[key] = value;
+  }
+}
+
+applyLocalEnvOverrides();
 
 export default defineConfig({
   tanstackStart: {

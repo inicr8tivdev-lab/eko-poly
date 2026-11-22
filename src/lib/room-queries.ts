@@ -51,44 +51,87 @@ export const roomQuery = (code: string) =>
     },
   });
 
-export const myRoomsQuery = () =>
+export function isAuthFailure(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const err = error as { message?: unknown; code?: unknown; status?: unknown };
+  const msg = typeof err.message === "string" ? err.message.toLowerCase() : "";
+  const code = typeof err.code === "string" ? err.code.toUpperCase() : "";
+  const status = typeof err.status === "number" ? err.status : 0;
+  return (
+    status === 401 ||
+    code === "PGRST301" ||
+    msg.includes("unauthorized") ||
+    msg.includes("jwt") ||
+    msg.includes("invalid token")
+  );
+}
+
+export function isMissingSchemaError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const err = error as { message?: unknown; code?: unknown; status?: unknown };
+  const msg = typeof err.message === "string" ? err.message.toLowerCase() : "";
+  const code = typeof err.code === "string" ? err.code.toUpperCase() : "";
+  return (
+    code === "PGRST205" ||
+    code === "42P01" ||
+    code === "42883" ||
+    msg.includes("schema cache") ||
+    msg.includes("could not find the table") ||
+    (msg.includes("relation") && msg.includes("does not exist"))
+  );
+}
+
+export const myRoomsQuery = (userId?: string) =>
   queryOptions({
-    queryKey: ["my-rooms"],
+    queryKey: ["my-rooms", userId ?? "current"],
+    retry: false,
     queryFn: async () => {
       if (!isSupabaseConfigured()) {
         return await getMyRooms();
       }
       const { data, error } = await supabase
         .from("games")
-        .select("id, code, status, updated_at, game_players(display_name)")
+        .select("id, code, status, updated_at, game_players(display_name, user_id)")
         .eq("mode", "online")
         .in("status", ["lobby", "playing"])
         .order("updated_at", { ascending: false })
-        .limit(10);
+        .limit(20);
       if (error) throw error;
-      return data ?? [];
+      const rows = data ?? [];
+      if (!userId) return rows;
+      return rows.filter((r) => (r.game_players ?? []).some((p) => p.user_id === userId));
     },
   });
 
 export const myNameQuery = (userId: string) =>
   queryOptions({
     queryKey: ["my-name", userId],
+    retry: false,
     queryFn: async () => {
-      if (!isSupabaseConfigured()) {
-        return await getMyProfileName();
+      try {
+        if (!isSupabaseConfigured()) {
+          return await getMyProfileName();
+        }
+        const { data } = await supabase.from("profiles").select("display_name").eq("id", userId).maybeSingle();
+        return data?.display_name ?? "";
+      } catch {
+        return "";
       }
-      const { data } = await supabase.from("profiles").select("display_name").eq("id", userId).maybeSingle();
-      return data?.display_name ?? "";
     },
   });
 
 export const myAvatarQuery = (userId: string) =>
   queryOptions({
     queryKey: ["my-avatar", userId],
+    retry: false,
     queryFn: async () => {
-      if (!isSupabaseConfigured()) {
-        return (await getMyProfileAvatar()) ?? loadSavedAvatar();
+      try {
+        if (!isSupabaseConfigured()) {
+          return (await getMyProfileAvatar()) ?? loadSavedAvatar();
+        }
+        return loadSavedAvatar();
+      } catch {
+        return loadSavedAvatar();
       }
-      return loadSavedAvatar();
     },
   });

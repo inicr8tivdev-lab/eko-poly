@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { LovableMark } from "@lovable.dev/cloud-auth-js/react";
 import { UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { lovable } from "@/integrations/lovable";
-import { isSupabaseConfigured, signInAsGuest } from "@/integrations/supabase/client";
+import { isSupabaseConfigured, signInAsGuest, supabase } from "@/integrations/supabase/client";
 
 function GoogleLogo() {
   return (
@@ -17,11 +17,60 @@ function GoogleLogo() {
   );
 }
 
-/** Google and Lovable sign-in, or instant Guest sign-in when running without external auth. */
-export function AuthButtons({ onSignedIn }: { onSignedIn: () => void }) {
-  const [busy, setBusy] = useState<string | null>(null);
+function isLovableCloudProject(): boolean {
+  const url = import.meta.env["VITE_SUPABASE_URL"];
+  if (!url) return false;
+  try {
+    return new URL(url).hostname.endsWith(".lovable.cloud");
+  } catch {
+    return false;
+  }
+}
 
-  if (!isSupabaseConfigured()) {
+/** Google/Lovable OAuth when hosted on Lovable Cloud, Supabase Google OAuth if enabled on standalone Supabase, or Guest sign-in locally. */
+export function AuthButtons({
+  onSignedIn,
+  onAvailabilityChange,
+}: {
+  onSignedIn: () => void;
+  onAvailabilityChange?: (hasButtons: boolean) => void;
+}) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const configured = isSupabaseConfigured();
+  const lovableCloud = isLovableCloudProject();
+  const [supabaseGoogleEnabled, setSupabaseGoogleEnabled] = useState(false);
+
+  useEffect(() => {
+    if (!configured) {
+      onAvailabilityChange?.(true);
+      return;
+    }
+    if (lovableCloud) {
+      onAvailabilityChange?.(true);
+      return;
+    }
+    onAvailabilityChange?.(false);
+    const url = import.meta.env["VITE_SUPABASE_URL"];
+    const key = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"];
+    if (!url || !key) return;
+    let active = true;
+    fetch(`${url.replace(/\/+$/, "")}/auth/v1/settings`, { headers: { apikey: key } })
+      .then((res) => (res.ok ? (res.json() as Promise<{ external?: { google?: boolean } }>) : null))
+      .then((settings) => {
+        if (!active) return;
+        const enabled = Boolean(settings?.external?.google);
+        setSupabaseGoogleEnabled(enabled);
+        onAvailabilityChange?.(enabled);
+      })
+      .catch(() => {
+        if (active) onAvailabilityChange?.(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [configured, lovableCloud, onAvailabilityChange]);
+
+  if (!configured) {
     const guest = async () => {
       setBusy("guest");
       const res = await signInAsGuest();
@@ -37,6 +86,32 @@ export function AuthButtons({ onSignedIn }: { onSignedIn: () => void }) {
         <Button type="button" variant="secondary" disabled={busy !== null} onClick={guest} className="h-10 gap-2.5">
           <UserCheck className="size-[18px]!" />
           Continue as Guest
+        </Button>
+      </div>
+    );
+  }
+
+  if (!lovableCloud) {
+    if (!supabaseGoogleEnabled) return null;
+    const googleOAuth = async () => {
+      setBusy("google");
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: `${window.location.origin}/auth` },
+      });
+      setBusy(null);
+      if (error) toast.error("Sign-in didn't go through. Please try again.");
+    };
+    return (
+      <div className="grid gap-2">
+        <Button
+          type="button"
+          disabled={busy !== null}
+          onClick={googleOAuth}
+          className="h-10 gap-2.5 border border-google-border bg-google px-3 text-sm font-medium text-google-foreground hover:bg-google/90"
+        >
+          <GoogleLogo />
+          Continue with Google
         </Button>
       </div>
     );
