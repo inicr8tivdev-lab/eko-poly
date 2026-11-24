@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { initStartupMusic } from "@/lib/music";
 import { supabase } from "@/lib/supabase";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -90,7 +91,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:description", content: "A Monopoly-style board game inspired by Lagos life." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
       {
@@ -133,12 +133,16 @@ function RootComponent() {
   const router = useRouter();
 
   useEffect(() => {
+    const cleanupMusic = initStartupMusic();
     const { data } = supabase.auth.onAuthStateChange((event) => {
       if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
       void router.invalidate();
       if (event !== "SIGNED_OUT") void queryClient.invalidateQueries();
     });
-    return () => data.subscription.unsubscribe();
+    return () => {
+      cleanupMusic();
+      data.subscription.unsubscribe();
+    };
   }, [router, queryClient]);
 
   return (

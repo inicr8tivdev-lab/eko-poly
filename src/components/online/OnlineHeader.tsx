@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { LogOut } from "lucide-react";
+import { MusicToggle } from "@/components/MusicToggle";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
 import icon from "@/assets/ekopoly-icon.png";
@@ -20,9 +21,12 @@ export function OnlineHeader() {
         <img src={icon} alt="" width={36} height={36} className="size-9" />
         <span className="font-display text-lg font-black tracking-tight text-primary">EKOPOLY</span>
       </Link>
-      <Button variant="ghost" size="sm" onClick={signOut}>
-        <LogOut /> Sign out
-      </Button>
+      <div className="flex items-center gap-1">
+        <MusicToggle />
+        <Button variant="ghost" size="sm" onClick={signOut}>
+          <LogOut /> Sign out
+        </Button>
+      </div>
     </header>
   );
 }

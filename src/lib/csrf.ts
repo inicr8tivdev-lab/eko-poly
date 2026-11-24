@@ -1,10 +1,12 @@
 export function isAllowedOrigin(origin: string, request: Request): boolean {
   const reqOrigin = new URL(request.url).origin;
   if (origin === reqOrigin) return true;
-  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
-  if (!forwardedHost) return false;
   const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() || "https";
-  return origin === `${forwardedProto}://${forwardedHost}`;
+  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  if (forwardedHost && origin === `${forwardedProto}://${forwardedHost}`) return true;
+  const host = request.headers.get("host")?.split(",")[0]?.trim();
+  if (host && origin === `${forwardedProto}://${host}`) return true;
+  return false;
 }
 
 export function isAllowedSecFetchSite(fetchSite: string, request: Request): boolean {

@@ -20,9 +20,11 @@ export const Route = createFileRoute("/")({
         property: "og:description",
         content: "Buy Lekki, survive go-slow, dodge LASTMA and become the Big Man of Eko.",
       },
+      { property: "og:url", content: "https://eko-poly.vercel.app/" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
+    links: [{ rel: "canonical", href: "https://eko-poly.vercel.app/" }],
   }),
   component: Index,
 });

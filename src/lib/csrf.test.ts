@@ -46,4 +46,17 @@ describe("CSRF origin and Sec-Fetch-Site helpers", () => {
     });
     expect(isAllowedSecFetchSite("cross-site", attacker)).toBe(false);
   });
+
+  it("allows production Vercel app host header", () => {
+    const req = new Request("http://127.0.0.1:3000/_serverFn/createRoom", {
+      method: "POST",
+      headers: {
+        Origin: "https://eko-poly.vercel.app",
+        Host: "eko-poly.vercel.app",
+        "x-forwarded-proto": "https",
+      },
+    });
+    expect(isAllowedOrigin("https://eko-poly.vercel.app", req)).toBe(true);
+    expect(isAllowedOrigin("https://evil.example", req)).toBe(false);
+  });
 });

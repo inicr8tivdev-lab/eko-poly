@@ -137,4 +137,22 @@ describe("GameScreen mobile & online play controls", () => {
     expect(screen.getByRole("button", { name: "Mute sound effects" })).toHaveAttribute("aria-pressed", "true");
     expect(window.localStorage.getItem("ekopoly-sound-v1")).toBe("true");
   });
+
+  it("toggles background music on and off and persists the preference", () => {
+    window.localStorage.clear();
+    const game = makeOnlineGame();
+
+    render(<GameScreen game={game} setGame={() => {}} onQuit={() => {}} onNewGame={() => {}} />);
+
+    const toggle = screen.getByRole("button", { name: "Turn music off" });
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(toggle);
+    expect(screen.getByRole("button", { name: "Turn music on" })).toHaveAttribute("aria-pressed", "false");
+    expect(window.localStorage.getItem("ekopoly-music-v1")).toBe("false");
+
+    fireEvent.click(screen.getByRole("button", { name: "Turn music on" }));
+    expect(screen.getByRole("button", { name: "Turn music off" })).toHaveAttribute("aria-pressed", "true");
+    expect(window.localStorage.getItem("ekopoly-music-v1")).toBe("true");
+  });
 });

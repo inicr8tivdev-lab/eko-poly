@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import logo from "@/assets/ekopoly-logo.png";
 import poster from "@/assets/lagos-poster.jpg";
 import { type GameState, type PlayerConfig } from "@/game/engine";
+import { MusicToggle } from "@/components/MusicToggle";
 import { loadSavedAvatar, saveLocalAvatar } from "@/lib/avatar";
 import { cn } from "@/lib/utils";
 import { AvatarPicker } from "./AvatarPicker";
@@ -54,9 +55,12 @@ export function Setup({
       </div>
 
       <section className="flex flex-col justify-center px-6 py-12 sm:px-12">
-        <h1>
-          <img src={logo} alt="Ekopoly" width={560} height={468} className="h-auto w-52 sm:w-64" />
-        </h1>
+        <div className="flex items-start justify-between gap-4">
+          <h1>
+            <img src={logo} alt="Ekopoly" width={560} height={468} className="h-auto w-52 sm:w-64" />
+          </h1>
+          <MusicToggle compactOnMobile={false} variant="outline" />
+        </div>
         <p className="mt-4 max-w-md text-lg text-muted-foreground">
           The Lagos property game. Buy Lekki, survive go-slow, dodge LASTMA — and become the Big Man of Eko.
         </p>

@@ -24,6 +24,7 @@ import {
   setSoundEnabled,
   unlockAudio,
 } from "@/lib/sounds";
+import { MusicToggle } from "@/components/MusicToggle";
 import { cn } from "@/lib/utils";
 import { Board } from "./Board";
 import { ActionBar, CenterPanel } from "./CenterPanel";
@@ -232,6 +233,7 @@ export function GameScreen({
           )}
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          <MusicToggle />
           <Button
             variant="ghost"
             size="sm"

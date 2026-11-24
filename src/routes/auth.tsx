@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { MusicToggle } from "@/components/MusicToggle";
 import { AuthButtons } from "@/components/auth/AuthButtons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,6 +47,7 @@ export const Route = createFileRoute("/auth")({
       { name: "description", content: "Sign in to create a private Ekopoly room or join your friends' game." },
       { property: "og:title", content: "Sign in — Ekopoly online" },
       { property: "og:description", content: "Play Ekopoly, the Lagos property game, with friends on their own phones." },
+      { property: "og:url", content: "https://eko-poly.vercel.app/auth" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -177,7 +179,10 @@ function AuthPage() {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-4 py-10">
+    <main className="relative flex min-h-screen items-center justify-center px-4 py-10">
+      <div className="absolute right-4 top-4">
+        <MusicToggle compactOnMobile={false} variant="outline" />
+      </div>
       <div className="w-full max-w-sm">
         <Link to="/" className="mx-auto block w-40">
           <img src={logo} alt="Ekopoly" width={560} height={468} className="h-auto w-full" />
