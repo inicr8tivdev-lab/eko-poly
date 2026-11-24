@@ -32,16 +32,32 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
 import { createLocalDbClient } from '@/lib/local-online-store.server';
 import { getPublicSupabaseConfig } from './publicConfig';
 
+function jwtProjectRef(token: string): string | undefined {
+  const parts = token.split(".");
+  if (parts.length !== 3 || !parts[1]) return undefined;
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")) as { ref?: unknown };
+    return typeof payload.ref === "string" ? payload.ref : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function isSupabaseAdminConfigured(): boolean {
-  const url = process.env['SUPABASE_URL'];
-  const publicUrl = getPublicSupabaseConfig().url;
+  const url = process.env["SUPABASE_URL"]?.replace(/\/+$/, "").trim();
+  const publicCfg = getPublicSupabaseConfig();
+  const publicUrl = publicCfg.url.replace(/\/+$/, "");
   if (publicUrl && url && publicUrl !== url) return false;
-  return Boolean(publicUrl && process.env['SUPABASE_SERVICE_ROLE_KEY']);
+  const serviceKey = process.env["SUPABASE_SERVICE_ROLE_KEY"]?.trim();
+  if (!publicUrl || !serviceKey) return false;
+  const keyRef = jwtProjectRef(serviceKey);
+  if (keyRef && publicCfg.projectId && keyRef !== publicCfg.projectId) return false;
+  return true;
 }
 
 function createSupabaseAdminClient() {
   const SUPABASE_URL = getPublicSupabaseConfig().url;
-  const SUPABASE_SERVICE_ROLE_KEY = process.env['SUPABASE_SERVICE_ROLE_KEY'];
+  const SUPABASE_SERVICE_ROLE_KEY = process.env["SUPABASE_SERVICE_ROLE_KEY"]?.trim();
 
   if (!isSupabaseAdminConfigured() || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     return createLocalDbClient() as unknown as ReturnType<typeof createClient<Database>>;

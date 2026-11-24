@@ -11,33 +11,36 @@ export interface PublicSupabaseConfig {
   publishableKey: string;
 }
 
+function projectIdFromUrl(url: string): string | undefined {
+  try {
+    const host = new URL(url).hostname;
+    const sub = host.split(".")[0];
+    return sub || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function getPublicSupabaseConfig(): PublicSupabaseConfig {
-  const viteProjectId = import.meta.env["VITE_SUPABASE_PROJECT_ID"]?.trim();
-  const viteUrl = import.meta.env["VITE_SUPABASE_URL"]?.trim();
-  const viteKey = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"]?.trim();
+  const viteEnv = typeof import.meta !== "undefined" && import.meta.env ? import.meta.env : undefined;
+  const procEnv = typeof process !== "undefined" ? process.env : undefined;
 
-  const procProjectId = typeof process !== "undefined" ? process.env["SUPABASE_PROJECT_ID"]?.trim() : undefined;
-  const procUrl = typeof process !== "undefined" ? process.env["SUPABASE_URL"]?.trim() : undefined;
-  const procKey = typeof process !== "undefined" ? process.env["SUPABASE_PUBLISHABLE_KEY"]?.trim() : undefined;
+  const viteProjectId = viteEnv?.["VITE_SUPABASE_PROJECT_ID"]?.trim() || procEnv?.["VITE_SUPABASE_PROJECT_ID"]?.trim();
+  const viteUrl = viteEnv?.["VITE_SUPABASE_URL"]?.trim() || procEnv?.["VITE_SUPABASE_URL"]?.trim();
+  const viteKey = viteEnv?.["VITE_SUPABASE_PUBLISHABLE_KEY"]?.trim() || procEnv?.["VITE_SUPABASE_PUBLISHABLE_KEY"]?.trim();
 
+  // Only override the default project when VITE_* variables are explicitly configured
+  // so the browser client and server functions never talk to different Supabase projects.
   if (viteUrl && viteKey) {
     return {
-      projectId: viteProjectId || DEFAULT_SUPABASE_PROJECT_ID,
-      url: viteUrl,
+      projectId: viteProjectId || projectIdFromUrl(viteUrl) || DEFAULT_SUPABASE_PROJECT_ID,
+      url: viteUrl.replace(/\/+$/, ""),
       publishableKey: viteKey,
     };
   }
 
-  if (procUrl && procKey) {
-    return {
-      projectId: procProjectId || DEFAULT_SUPABASE_PROJECT_ID,
-      url: procUrl,
-      publishableKey: procKey,
-    };
-  }
-
   return {
-    projectId: viteProjectId || procProjectId || DEFAULT_SUPABASE_PROJECT_ID,
+    projectId: viteProjectId || DEFAULT_SUPABASE_PROJECT_ID,
     url: DEFAULT_SUPABASE_URL,
     publishableKey: DEFAULT_SUPABASE_PUBLISHABLE_KEY,
   };

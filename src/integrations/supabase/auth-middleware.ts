@@ -100,8 +100,10 @@ export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server
 
     const { data, error } = await supabase.auth.getClaims(token);
     let claims = data?.claims;
+    let userErrMsg: string | undefined;
     if (error || !claims) {
       const { data: userData, error: userErr } = await supabase.auth.getUser(token);
+      userErrMsg = userErr?.message;
       if (!userErr && userData.user?.id) {
         claims = {
           sub: userData.user.id,
@@ -122,7 +124,11 @@ export const requireSupabaseAuth = createMiddleware({ type: 'function' }).server
           },
         });
       }
-      console.warn('requireSupabaseAuth: rejected token', error?.message);
+      console.warn('requireSupabaseAuth: rejected token', {
+        url: SUPABASE_URL,
+        claimsError: error?.message,
+        userError: userErrMsg,
+      });
       throw new Error('Unauthorized: Invalid token');
     }
 
