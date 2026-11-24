@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { canAct, createGame, endGameEarly, netWorth, reduce, rollDice, type Action, type GameState } from "@/game/engine";
+import { getPublicSupabaseConfig } from "@/integrations/supabase/publicConfig";
 import { isValidAvatar } from "./avatar";
 import { MAX_PLAYERS, MIN_PLAYERS, actionSchema, cleanName, isValidCode, makeCode, nextFreeSeat, normalizeCode } from "./rooms";
 
@@ -28,7 +29,7 @@ function isLocalContext(claims: unknown): boolean {
 }
 
 function isRemoteSupabaseEnv(): boolean {
-  return Boolean(import.meta.env["VITE_SUPABASE_URL"] || process.env["SUPABASE_URL"]);
+  return Boolean(getPublicSupabaseConfig().url);
 }
 
 async function admin(fallback?: unknown, claims?: unknown) {

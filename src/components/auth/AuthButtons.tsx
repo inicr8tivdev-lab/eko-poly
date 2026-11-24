@@ -4,6 +4,7 @@ import { UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { lovable } from "@/integrations/lovable";
+import { getPublicSupabaseConfig } from "@/integrations/supabase/publicConfig";
 import { isSupabaseConfigured, signInAsGuest, supabase } from "@/lib/supabase";
 
 function GoogleLogo() {
@@ -18,7 +19,7 @@ function GoogleLogo() {
 }
 
 function isLovableCloudProject(): boolean {
-  const url = import.meta.env["VITE_SUPABASE_URL"];
+  const { url } = getPublicSupabaseConfig();
   if (!url) return false;
   try {
     return new URL(url).hostname.endsWith(".lovable.cloud");
@@ -50,8 +51,7 @@ export function AuthButtons({
       return;
     }
     onAvailabilityChange?.(false);
-    const url = import.meta.env["VITE_SUPABASE_URL"];
-    const key = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"];
+    const { url, publishableKey: key } = getPublicSupabaseConfig();
     if (!url || !key) return;
     let active = true;
     fetch(`${url.replace(/\/+$/, "")}/auth/v1/settings`, { headers: { apikey: key } })

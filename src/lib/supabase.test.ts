@@ -7,8 +7,9 @@ describe("lib/supabase configuration", () => {
     expect(integrationSupabase.auth).toBe(supabase.auth);
   });
 
-  it("enables persistSession, autoRefreshToken, and detectSessionInUrl when configured", () => {
-    if (!isSupabaseConfigured()) return;
+  it("enables persistSession, autoRefreshToken, and detectSessionInUrl for the configured project", () => {
+    expect(isSupabaseConfigured()).toBe(true);
+    expect(getSupabaseStorageKey()).toBe("sb-tqgmbmumtjscbobhwbxo-auth-token");
     const auth = supabase.auth as unknown as {
       storageKey: string;
       persistSession: boolean;

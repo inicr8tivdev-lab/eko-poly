@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { brokeredPreviewStorage, type PreviewAuthStorage } from "@/integrations/supabase/previewAuthStorage";
+import { getPublicSupabaseConfig } from "@/integrations/supabase/publicConfig";
 
 const LOCAL_SESSION_KEY = "ekopoly-local-auth-session";
 
@@ -17,12 +18,8 @@ function isNewSupabaseApiKey(value: string): boolean {
 }
 
 function getSupabaseEnv(): { url: string | undefined; key: string | undefined } {
-  const url =
-    import.meta.env["VITE_SUPABASE_URL"] || (typeof process !== "undefined" ? process.env["SUPABASE_URL"] : undefined);
-  const key =
-    import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ||
-    (typeof process !== "undefined" ? process.env["SUPABASE_PUBLISHABLE_KEY"] : undefined);
-  return { url, key };
+  const { url, publishableKey } = getPublicSupabaseConfig();
+  return { url, key: publishableKey };
 }
 
 export function isSupabaseConfigured(): boolean {
