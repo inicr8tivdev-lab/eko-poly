@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { OnlineHeader } from "@/components/online/OnlineHeader";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { loadSavedAvatar, saveLocalAvatar } from "@/lib/avatar";
+import { fallbackPlayerName } from "@/lib/profile";
 import { isAuthFailure, isMissingSchemaError, myAvatarQuery, myNameQuery, myRoomsQuery } from "@/lib/room-queries";
 import { CODE_LENGTH, normalizeCode } from "@/lib/rooms";
 import { createRoom, joinRoom, updateMyAvatar } from "@/lib/rooms.functions";
@@ -46,15 +47,16 @@ function OnlinePage() {
   const { user } = Route.useRouteContext();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const defaultName = fallbackPlayerName(user);
   const { data: savedName = "" } = useQuery(myNameQuery(user.id));
   const { data: savedAvatar } = useQuery(myAvatarQuery(user.id));
   const roomsQuery = useQuery(myRoomsQuery(user.id));
   const rooms = roomsQuery.data ?? [];
-  const [name, setName] = useState(savedName);
+  const [name, setName] = useState(savedName || defaultName);
   const [avatar, setAvatar] = useState<string | null>(savedAvatar ?? null);
   const [length, setLength] = useState<number | null>(30);
   const [code, setCode] = useState("");
-  useEffect(() => setName((n) => n || savedName), [savedName]);
+  useEffect(() => setName((n) => n || savedName || defaultName), [savedName, defaultName]);
   useEffect(() => {
     const local = loadSavedAvatar();
     setAvatar((prev) => prev ?? savedAvatar ?? local ?? null);
@@ -104,8 +106,13 @@ function OnlinePage() {
   const createM = useMutation({
     mutationFn: () => create({ data: { name, maxRounds: length, avatar } }),
     onSuccess: (r) => {
-      if (r.ok) void go(r.code);
-      else toast.error(r.error);
+      if (r.ok) {
+        void queryClient.invalidateQueries({ queryKey: ["my-rooms", user.id] });
+        void queryClient.invalidateQueries({ queryKey: ["my-name", user.id] });
+        void go(r.code);
+      } else {
+        toast.error(r.error);
+      }
     },
     onError: (err) => {
       console.error("createRoom error", err);

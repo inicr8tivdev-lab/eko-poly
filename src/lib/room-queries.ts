@@ -1,5 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
-import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
+import { isSupabaseConfigured, supabase } from "./supabase";
 import type { GameState } from "@/game/engine";
 import { loadSavedAvatar } from "./avatar";
 import { getMyProfileAvatar, getMyProfileName, getMyRooms, getRoomState } from "./rooms.functions";
@@ -27,7 +27,7 @@ export interface Room {
 export const roomQuery = (code: string) =>
   queryOptions({
     queryKey: ["room", code],
-    refetchInterval: isSupabaseConfigured() ? 15_000 : 1_500, // fast poll when using local server store
+    refetchInterval: isSupabaseConfigured() ? 5_000 : 1_500, // fast poll when using local server store
     queryFn: async (): Promise<Room | null> => {
       if (!isSupabaseConfigured()) {
         return (await getRoomState({ data: { code } })) as Room | null;

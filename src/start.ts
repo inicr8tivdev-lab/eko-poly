@@ -1,6 +1,7 @@
 import { createStart, createCsrfMiddleware, createMiddleware } from "@tanstack/react-start";
 
 import { attachSupabaseAuth } from "./integrations/supabase/auth-attacher";
+import { isAllowedOrigin, isAllowedSecFetchSite } from "./lib/csrf";
 import { renderErrorPage } from "./lib/error-page";
 
 const errorMiddleware = createMiddleware().server(async ({ next }) => {
@@ -23,6 +24,8 @@ const errorMiddleware = createMiddleware().server(async ({ next }) => {
 // from cross-site requests.
 const csrfMiddleware = createCsrfMiddleware({
   filter: (ctx) => ctx.handlerType === "serverFn",
+  origin: (origin, ctx) => isAllowedOrigin(origin, ctx.request),
+  secFetchSite: (fetchSite, ctx) => isAllowedSecFetchSite(fetchSite, ctx.request),
 });
 
 // requestMiddleware runs on every request; functionMiddleware only on server functions, where

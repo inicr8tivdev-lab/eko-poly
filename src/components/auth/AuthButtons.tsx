@@ -4,7 +4,7 @@ import { UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { lovable } from "@/integrations/lovable";
-import { isSupabaseConfigured, signInAsGuest, supabase } from "@/integrations/supabase/client";
+import { isSupabaseConfigured, signInAsGuest, supabase } from "@/lib/supabase";
 
 function GoogleLogo() {
   return (

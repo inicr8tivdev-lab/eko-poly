@@ -13,7 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { tokenOf, type Action } from "@/game/engine";
 import { loadSavedAvatar, saveLocalAvatar } from "@/lib/avatar";
-import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
+import { fallbackPlayerName, type AuthUserLike } from "@/lib/profile";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { isAuthFailure, isMissingSchemaError, myAvatarQuery, myNameQuery, roomQuery, type Room } from "@/lib/room-queries";
 import { MAX_PLAYERS, MIN_PLAYERS, normalizeCode } from "@/lib/rooms";
 import { endRoom, joinRoom, leaveRoom, sendMove, startRoom, updateMyAvatar } from "@/lib/rooms.functions";
@@ -125,19 +126,20 @@ function RoomPage() {
     );
   }
 
-  if (!room) return <JoinRoom code={code} userId={user.id} />;
+  if (!room) return <JoinRoom code={code} user={user} />;
   const me = room.players.find((p) => p.user_id === user.id);
-  if (!me) return <JoinRoom code={code} userId={user.id} />;
+  if (!me) return <JoinRoom code={code} user={user} />;
   if (room.status === "lobby" || !room.state) return <Lobby room={room} userId={user.id} />;
   return <OnlineGame room={room} seat={me.seat} isHost={room.host_id === user.id} />;
 }
 
-function JoinRoom({ code, userId }: { code: string; userId: string }) {
-  const { data: savedName = "" } = useQuery(myNameQuery(userId));
-  const { data: savedAvatar } = useQuery(myAvatarQuery(userId));
-  const [name, setName] = useState(savedName);
+function JoinRoom({ code, user }: { code: string; user: AuthUserLike }) {
+  const defaultName = fallbackPlayerName(user);
+  const { data: savedName = "" } = useQuery(myNameQuery(user.id));
+  const { data: savedAvatar } = useQuery(myAvatarQuery(user.id));
+  const [name, setName] = useState(savedName || defaultName);
   const [avatar, setAvatar] = useState<string | null>(savedAvatar ?? null);
-  useEffect(() => setName((n) => n || savedName), [savedName]);
+  useEffect(() => setName((n) => n || savedName || defaultName), [savedName, defaultName]);
   useEffect(() => {
     const local = loadSavedAvatar();
     setAvatar((prev) => prev ?? savedAvatar ?? local ?? null);
