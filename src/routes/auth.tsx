@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { MusicToggle } from "@/components/MusicToggle";
 import { AuthButtons } from "@/components/auth/AuthButtons";
@@ -58,15 +58,17 @@ export const Route = createFileRoute("/auth")({
 function AuthPage() {
   const { redirect } = Route.useSearch();
   const navigate = useNavigate();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [mode, setMode] = useState<"signin" | "signup" | "forgot" | "recovery">("signin");
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [authError, setAuthError] = useState<{ message: string; suggestSignup?: boolean } | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [authError, setAuthError] = useState<{ message: string; wrongCreds?: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [checkEmail, setCheckEmail] = useState(false);
+  const [checkEmail, setCheckEmail] = useState<"confirm" | "reset" | null>(null);
   const [hasOAuthButtons, setHasOAuthButtons] = useState(false);
   const navigatedRef = useRef(false);
+  const isRecoveryRef = useRef(false);
 
   const finish = useCallback(() => {
     if (navigatedRef.current) return;
@@ -80,20 +82,33 @@ function AuthPage() {
   useEffect(() => {
     if (redirect) writeNextPath(redirect);
     let active = true;
-    supabase.auth
-      .getUser()
-      .then(({ data }) => {
-        if (active && data.user) {
-          void ensureUserProfile(data.user).finally(() => {
-            if (active) finish();
-          });
-        }
-      })
-      .catch(() => {});
+    if (typeof window !== "undefined" && window.location.hash.includes("type=recovery")) {
+      isRecoveryRef.current = true;
+      setMode("recovery");
+    } else {
+      supabase.auth
+        .getUser()
+        .then(({ data }) => {
+          if (active && data.user && !isRecoveryRef.current) {
+            void ensureUserProfile(data.user).finally(() => {
+              if (active && !isRecoveryRef.current) finish();
+            });
+          }
+        })
+        .catch(() => {});
+    }
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" && session && active) {
+      if (!active) return;
+      if (event === "PASSWORD_RECOVERY") {
+        isRecoveryRef.current = true;
+        setMode("recovery");
+        setAuthError(null);
+        setCheckEmail(null);
+        return;
+      }
+      if (event === "SIGNED_IN" && session && !isRecoveryRef.current && !window.location.hash.includes("type=recovery")) {
         void ensureUserProfile(session.user).finally(() => {
-          if (active) finish();
+          if (active && !isRecoveryRef.current) finish();
         });
       }
     });
@@ -103,28 +118,60 @@ function AuthPage() {
     };
   }, [finish, redirect]);
 
-  const switchMode = (nextMode: "signin" | "signup") => {
+  const switchMode = (nextMode: "signin" | "signup" | "forgot" | "recovery") => {
+    isRecoveryRef.current = nextMode === "recovery";
     setMode(nextMode);
     setAuthError(null);
+    setCheckEmail(null);
   };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanEmail = email.trim();
-    if (!cleanEmail) {
-      setAuthError({ message: "Please enter your email address." });
-      return;
-    }
     setAuthError(null);
     setBusy(true);
     try {
+      if (mode === "recovery") {
+        const { data, error } = await supabase.auth.updateUser({ password });
+        if (error) {
+          setAuthError({ message: error.message });
+          toast.error(error.message);
+          return;
+        }
+        toast.success("Password updated!");
+        if (data.user) {
+          await ensureUserProfile(data.user);
+        }
+        finish();
+        return;
+      }
+
+      const cleanEmail = email.trim();
+      if (!cleanEmail) {
+        setAuthError({ message: "Please enter your email address." });
+        return;
+      }
+
+      if (mode === "forgot") {
+        const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+          redirectTo: `${window.location.origin}/auth`,
+        });
+        if (error) {
+          setAuthError({ message: error.message });
+          toast.error(error.message);
+          return;
+        }
+        setCheckEmail("reset");
+        return;
+      }
+
       if (mode === "signin") {
         const { data, error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
         if (error) {
           const lower = error.message.toLowerCase();
           if (lower.includes("invalid login credentials")) {
-            const msg = "Wrong email or password. If you haven't created an account yet, switch to Create account.";
-            setAuthError({ message: msg, suggestSignup: true });
+            const msg =
+              "Wrong email or password. Check for typos or browser autofill, reset your password, or create an account if you are new.";
+            setAuthError({ message: msg, wrongCreds: true });
             toast.error("Wrong email or password.");
           } else if (lower.includes("email not confirmed")) {
             const msg = "Please confirm your email link before signing in.";
@@ -155,8 +202,8 @@ function AuthPage() {
       if (error) {
         const lower = error.message.toLowerCase();
         if (lower.includes("already registered") || lower.includes("already exists")) {
-          const msg = "An account with this email already exists — try signing in.";
-          setAuthError({ message: msg });
+          const msg = "An account with this email already exists — sign in or reset your password.";
+          setAuthError({ message: msg, wrongCreds: true });
           setMode("signin");
           toast.error(msg);
         } else {
@@ -170,7 +217,7 @@ function AuthPage() {
         finish();
         return;
       }
-      setCheckEmail(true);
+      setCheckEmail("confirm");
     } catch {
       toast.error("Could not reach the sign-in service. Please try again.");
     } finally {
@@ -188,55 +235,91 @@ function AuthPage() {
           <img src={logo} alt="Ekopoly" width={560} height={468} className="h-auto w-full" />
         </Link>
         <div className="mt-6 rounded-2xl border border-border bg-card p-6 shadow-pop">
-          <div className="grid grid-cols-2 gap-1 rounded-xl bg-secondary p-1" role="tablist" aria-label="Authentication mode">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === "signin"}
-              onClick={() => switchMode("signin")}
-              className={cn(
-                "rounded-lg px-3 py-2 text-sm font-semibold transition",
-                mode === "signin" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              Sign in
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mode === "signup"}
-              onClick={() => switchMode("signup")}
-              className={cn(
-                "rounded-lg px-3 py-2 text-sm font-semibold transition",
-                mode === "signup" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              Create account
-            </button>
-          </div>
+          {(mode === "signin" || mode === "signup") && (
+            <div className="grid grid-cols-2 gap-1 rounded-xl bg-secondary p-1" role="tablist" aria-label="Authentication mode">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === "signin"}
+                onClick={() => switchMode("signin")}
+                className={cn(
+                  "rounded-lg px-3 py-2 text-sm font-semibold transition",
+                  mode === "signin" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                Sign in
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === "signup"}
+                onClick={() => switchMode("signup")}
+                className={cn(
+                  "rounded-lg px-3 py-2 text-sm font-semibold transition",
+                  mode === "signup" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                Create account
+              </button>
+            </div>
+          )}
 
-          <h1 className="mt-5 font-display text-xl font-black">
-            {mode === "signin" ? "Sign in to play online" : "Create your account"}
+          <h1 className={cn("font-display text-xl font-black", (mode === "signin" || mode === "signup") && "mt-5")}>
+            {mode === "signin"
+              ? "Sign in to play online"
+              : mode === "signup"
+                ? "Create your account"
+                : mode === "forgot"
+                  ? "Reset your password"
+                  : "Set a new password"}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Online rooms need an account so your friends know who's who.
+            {mode === "forgot"
+              ? "Enter your account email and we'll send you a reset link."
+              : mode === "recovery"
+                ? "Choose a new password (at least 6 characters) for your account."
+                : "Online rooms need an account so your friends know who's who."}
           </p>
 
           {checkEmail ? (
-            <div className="mt-6 rounded-xl bg-secondary p-4 text-sm">
-              Check <strong>{email}</strong> for a confirmation link. Open it on this device and you'll come straight back here.
+            <div className="mt-6 space-y-3 rounded-xl bg-secondary p-4 text-sm">
+              <p>
+                {checkEmail === "reset" ? (
+                  <>
+                    Check <strong>{email.trim()}</strong> for your password reset link. Open it on this device to set a new password.
+                  </>
+                ) : (
+                  <>
+                    Check <strong>{email.trim()}</strong> for a confirmation link. Open it on this device and you'll come straight back here.
+                  </>
+                )}
+              </p>
+              <button
+                type="button"
+                className="font-semibold text-primary underline underline-offset-4"
+                onClick={() => switchMode("signin")}
+              >
+                ← Back to sign in
+              </button>
             </div>
           ) : (
             <>
-              <div className="mt-6">
-                <AuthButtons onSignedIn={finish} onAvailabilityChange={setHasOAuthButtons} />
-              </div>
-              {hasOAuthButtons && (
-                <div className="my-5 flex items-center gap-3 text-xs uppercase tracking-widest text-muted-foreground">
-                  <span className="h-px flex-1 bg-border" /> or <span className="h-px flex-1 bg-border" />
-                </div>
+              {(mode === "signin" || mode === "signup") && (
+                <>
+                  <div className="mt-6">
+                    <AuthButtons onSignedIn={finish} onAvailabilityChange={setHasOAuthButtons} />
+                  </div>
+                  {hasOAuthButtons && (
+                    <div className="my-5 flex items-center gap-3 text-xs uppercase tracking-widest text-muted-foreground">
+                      <span className="h-px flex-1 bg-border" /> or <span className="h-px flex-1 bg-border" />
+                    </div>
+                  )}
+                </>
               )}
-              <form onSubmit={submit} className={hasOAuthButtons ? "grid gap-3" : "mt-5 grid gap-3"}>
+              <form
+                onSubmit={submit}
+                className={hasOAuthButtons && (mode === "signin" || mode === "signup") ? "grid gap-3" : "mt-5 grid gap-3"}
+              >
                 {mode === "signup" && (
                   <div className="grid gap-1.5">
                     <Label htmlFor="display-name">Player name</Label>
@@ -254,63 +337,116 @@ function AuthPage() {
                     />
                   </div>
                 )}
-                <div className="grid gap-1.5">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    required
-                    autoComplete="email"
-                    value={email}
-                    onChange={(e) => {
-                      setEmail(e.target.value);
-                      setAuthError(null);
-                    }}
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    required
-                    minLength={6}
-                    autoComplete={mode === "signin" ? "current-password" : "new-password"}
-                    value={password}
-                    onChange={(e) => {
-                      setPassword(e.target.value);
-                      setAuthError(null);
-                    }}
-                  />
-                </div>
+                {mode !== "recovery" && (
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      required
+                      autoComplete="email"
+                      value={email}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        setAuthError(null);
+                      }}
+                    />
+                  </div>
+                )}
+                {mode !== "forgot" && (
+                  <div className="grid gap-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="password">{mode === "recovery" ? "New password" : "Password"}</Label>
+                      {mode === "signin" && (
+                        <button
+                          type="button"
+                          onClick={() => switchMode("forgot")}
+                          className="text-xs font-medium text-muted-foreground underline-offset-4 hover:text-primary hover:underline"
+                        >
+                          Forgot password?
+                        </button>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        required
+                        minLength={6}
+                        autoComplete={mode === "signin" ? "current-password" : "new-password"}
+                        className="pr-10"
+                        value={password}
+                        onChange={(e) => {
+                          setPassword(e.target.value);
+                          setAuthError(null);
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                        className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground"
+                      >
+                        {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {authError && (
                   <div className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-xs text-destructive" role="alert">
                     <p>{authError.message}</p>
-                    {authError.suggestSignup && (
-                      <button
-                        type="button"
-                        onClick={() => switchMode("signup")}
-                        className="mt-1.5 font-semibold text-primary underline underline-offset-4"
-                      >
-                        Switch to Create account →
-                      </button>
+                    {authError.wrongCreds && (
+                      <div className="mt-2 flex flex-wrap gap-3">
+                        <button
+                          type="button"
+                          onClick={() => switchMode("forgot")}
+                          className="font-semibold text-primary underline underline-offset-4"
+                        >
+                          Reset password →
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => switchMode("signup")}
+                          className="font-semibold text-primary underline underline-offset-4"
+                        >
+                          Switch to Create account →
+                        </button>
+                      </div>
                     )}
                   </div>
                 )}
                 <Button type="submit" variant="danfo" size="lg" disabled={busy} className="mt-1">
                   {busy && <Loader2 className="animate-spin" />}
-                  {mode === "signin" ? "Sign in" : "Create account"}
+                  {mode === "signin"
+                    ? "Sign in"
+                    : mode === "signup"
+                      ? "Create account"
+                      : mode === "forgot"
+                        ? "Send reset link"
+                        : "Update password"}
                 </Button>
               </form>
               <p className="mt-4 text-center text-sm text-muted-foreground">
-                {mode === "signin" ? "New here?" : "Already have an account?"}{" "}
-                <button
-                  type="button"
-                  className="font-semibold text-primary underline-offset-4 hover:underline"
-                  onClick={() => switchMode(mode === "signin" ? "signup" : "signin")}
-                >
-                  {mode === "signin" ? "Create an account" : "Sign in"}
-                </button>
+                {mode === "forgot" || mode === "recovery" ? (
+                  <button
+                    type="button"
+                    className="font-semibold text-primary underline-offset-4 hover:underline"
+                    onClick={() => switchMode("signin")}
+                  >
+                    ← Back to sign in
+                  </button>
+                ) : (
+                  <>
+                    {mode === "signin" ? "New here?" : "Already have an account?"}{" "}
+                    <button
+                      type="button"
+                      className="font-semibold text-primary underline-offset-4 hover:underline"
+                      onClick={() => switchMode(mode === "signin" ? "signup" : "signin")}
+                    >
+                      {mode === "signin" ? "Create an account" : "Sign in"}
+                    </button>
+                  </>
+                )}
               </p>
             </>
           )}
