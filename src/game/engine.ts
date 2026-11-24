@@ -10,6 +10,7 @@ import {
   type ColorGroup,
 } from "./board";
 import { OWAMBE, WAHALA } from "./cards";
+import type { ChatMessage } from "@/lib/chat";
 
 export const TOKENS = [
   { emoji: "🚌", label: "Danfo" },
@@ -102,6 +103,7 @@ export interface GameState {
   round: number;
   /** Game ends after this many rounds (richest wins); null = play until one player is left. */
   maxRounds: number | null;
+  chat?: ChatMessage[] | undefined;
 }
 
 export type Action =

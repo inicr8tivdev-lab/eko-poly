@@ -4,6 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { canAct, createGame, endGameEarly, netWorth, reduce, rollDice, type Action, type GameState } from "@/game/engine";
 import { getPublicSupabaseConfig } from "@/integrations/supabase/publicConfig";
 import { isValidAvatar } from "./avatar";
+import { appendChatMessage, cleanChatText, extractChatMessages, type ChatMessage } from "./chat";
 import { MAX_PLAYERS, MIN_PLAYERS, actionSchema, cleanName, isValidCode, makeCode, nextFreeSeat, normalizeCode } from "./rooms";
 
 const avatarSchema = z
@@ -195,7 +196,7 @@ export const startRoom = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<Result> => {
     const { data: game } = await context.supabase
       .from("games")
-      .select("id, host_id, status, max_rounds")
+      .select("id, host_id, status, max_rounds, state")
       .eq("id", data.gameId)
       .maybeSingle();
     if (!game) return { ok: false, error: "Room not found." };
@@ -221,11 +222,13 @@ export const startRoom = createServerFn({ method: "POST" })
       const { getLocalRoomPlayerAvatars } = await import("./local-online-store.server");
       avatars = getLocalRoomPlayerAvatars(game.id);
     }
-    const state = createGame(
+    const lobbyChat = extractChatMessages(game.state);
+    const createdState = createGame(
       list.map((p) => ({ name: p.display_name, isCpu: false, avatar: avatars[p.user_id] ?? null })),
       Math.random,
       game.max_rounds,
     );
+    const state: GameState = lobbyChat.length > 0 ? { ...createdState, chat: lobbyChat } : createdState;
     const { error } = await db
       .from("games")
       .update({ status: "playing", state: state as never, version: 1 })
@@ -286,6 +289,76 @@ export const sendMove = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const sendChatMessage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        gameId: z.string().uuid(),
+        text: z.string().max(400),
+        clientId: z.string().min(1).max(64).optional(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }): Promise<Result<{ message: ChatMessage }>> => {
+    const text = cleanChatText(data.text);
+    if (!text) return { ok: false, error: "Type a message first." };
+
+    const { data: me } = await context.supabase
+      .from("game_players")
+      .select("seat, display_name")
+      .eq("game_id", data.gameId)
+      .eq("user_id", context.userId)
+      .maybeSingle();
+    if (!me) return { ok: false, error: "You're not in this room." };
+
+    const message: ChatMessage = {
+      id: data.clientId ?? crypto.randomUUID(),
+      seat: me.seat,
+      sender: cleanName(me.display_name),
+      text,
+      sentAt: new Date().toISOString(),
+    };
+
+    const db = await admin(context.supabase, context.claims);
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const { data: game, error: loadErr } = await db
+        .from("games")
+        .select("id, status, state, version")
+        .eq("id", data.gameId)
+        .maybeSingle();
+      if (loadErr) {
+        console.error("sendChatMessage loadErr", loadErr);
+        return { ok: false, error: "Could not send message right now." };
+      }
+      if (!game) return { ok: false, error: "Room not found." };
+
+      const existing = extractChatMessages(game.state);
+      const already = existing.find((m) => m.id === message.id);
+      if (already) return { ok: true, message: already };
+
+      const nextChat = appendChatMessage(existing, message);
+      const baseState =
+        game.status === "lobby" || !game.state || typeof game.state !== "object"
+          ? {}
+          : (game.state as Record<string, unknown>);
+      const nextState = { ...baseState, chat: nextChat };
+
+      const { data: saved, error } = await db
+        .from("games")
+        .update({ state: nextState as never, updated_at: new Date().toISOString() })
+        .eq("id", game.id)
+        .eq("version", game.version)
+        .select("id");
+      if (error) {
+        console.error("sendChatMessage updateErr", error);
+        return { ok: false, error: "Could not send message right now." };
+      }
+      if (saved?.length) return { ok: true, message };
+    }
+    return { ok: false, error: "Could not send message right now. Please try again." };
+  });
+
 async function saveResults(gameId: string, next: GameState, fallback?: unknown, claims?: unknown) {
   const db = await admin(fallback, claims);
   const { data: players } = await db.from("game_players").select("user_id, seat, display_name").eq("game_id", gameId);
@@ -340,6 +413,13 @@ export const getMyRooms = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { listLocalRoomsForUser } = await import("./local-online-store.server");
     return listLocalRoomsForUser(context.userId);
+  });
+
+export const getOpenLobbies = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async () => {
+    const { listLocalOpenLobbies } = await import("./local-online-store.server");
+    return listLocalOpenLobbies();
   });
 
 export const getMyProfileName = createServerFn({ method: "GET" })

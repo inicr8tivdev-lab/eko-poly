@@ -1,23 +1,26 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { Check, Copy, Crown, Loader2, LogOut, Play, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { AvatarPicker } from "@/components/game/AvatarPicker";
 import { AvatarCircle } from "@/components/game/PlayerAvatar";
 import { GameScreen, type OnlinePlay } from "@/components/game/GameScreen";
+import { OnlineChat, type OnlineChatConfig } from "@/components/game/OnlineChat";
 import { OnlineHeader } from "@/components/online/OnlineHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { tokenOf, type Action } from "@/game/engine";
 import { loadSavedAvatar, saveLocalAvatar } from "@/lib/avatar";
+import { appendChatMessage, cleanChatText, mergeChatMessages, type ChatMessage } from "@/lib/chat";
 import { fallbackPlayerName, type AuthUserLike } from "@/lib/profile";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { isAuthFailure, isMissingSchemaError, myAvatarQuery, myNameQuery, roomQuery, type Room } from "@/lib/room-queries";
 import { MAX_PLAYERS, MIN_PLAYERS, normalizeCode } from "@/lib/rooms";
-import { endRoom, joinRoom, leaveRoom, sendMove, startRoom, updateMyAvatar } from "@/lib/rooms.functions";
+import { endRoom, joinRoom, leaveRoom, sendChatMessage, sendMove, startRoom, updateMyAvatar } from "@/lib/rooms.functions";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/room/$code")({
@@ -61,6 +64,99 @@ function useLiveRoom(room: Room | null, code: string) {
   }, [id, code, queryClient]);
 }
 
+function useRoomChat(room: Room | null, mySeat: number | undefined, myName: string | undefined): OnlineChatConfig {
+  const queryClient = useQueryClient();
+  const sendChat = useServerFn(sendChatMessage);
+  const [liveMessages, setLiveMessages] = useState<ChatMessage[]>([]);
+  const [pendingCount, setPendingCount] = useState(0);
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const roomId = room?.id;
+  const roomCode = room?.code;
+  const serverChat = room?.chat;
+
+  useEffect(() => {
+    if (!roomId || !isSupabaseConfigured()) {
+      channelRef.current = null;
+      return;
+    }
+    const channel = supabase
+      .channel(`room-chat-${roomId}`, { config: { broadcast: { self: false } } })
+      .on("broadcast", { event: "chat:message" }, ({ payload }) => {
+        if (!payload || typeof payload !== "object") return;
+        const p = payload as Partial<ChatMessage>;
+        if (
+          typeof p.id !== "string" ||
+          typeof p.seat !== "number" ||
+          typeof p.sender !== "string" ||
+          typeof p.text !== "string" ||
+          typeof p.sentAt !== "string"
+        ) {
+          return;
+        }
+        setLiveMessages((prev) => appendChatMessage(prev, p as ChatMessage));
+      })
+      .subscribe();
+    channelRef.current = channel;
+    return () => {
+      channelRef.current = null;
+      void supabase.removeChannel(channel);
+    };
+  }, [roomId]);
+
+  useEffect(() => {
+    if (!serverChat?.length) return;
+    const serverIds = new Set(serverChat.map((m) => m.id));
+    setLiveMessages((prev) => {
+      const filtered = prev.filter((m) => !serverIds.has(m.id));
+      return filtered.length === prev.length ? prev : filtered;
+    });
+  }, [serverChat]);
+
+  const onSend = useCallback(
+    async (raw: string) => {
+      if (!roomId || !roomCode) return;
+      const text = cleanChatText(raw);
+      if (!text) return;
+      const clientId = crypto.randomUUID();
+      const optimistic: ChatMessage = {
+        id: clientId,
+        seat: mySeat ?? 0,
+        sender: myName ?? "Player",
+        text,
+        sentAt: new Date().toISOString(),
+      };
+      setLiveMessages((prev) => appendChatMessage(prev, optimistic));
+      setPendingCount((c) => c + 1);
+      try {
+        const res = await sendChat({ data: { gameId: roomId, text, clientId } });
+        if (!res.ok) {
+          setLiveMessages((prev) => prev.filter((m) => m.id !== clientId));
+          toast.error(res.error);
+          return;
+        }
+        setLiveMessages((prev) => prev.map((m) => (m.id === clientId ? res.message : m)));
+        if (channelRef.current) {
+          void channelRef.current.send({ type: "broadcast", event: "chat:message", payload: res.message }).catch(() => {});
+        }
+        void queryClient.invalidateQueries({ queryKey: ["room", roomCode] });
+      } catch {
+        setLiveMessages((prev) => prev.filter((m) => m.id !== clientId));
+        toast.error("Could not send message. Please try again.");
+      } finally {
+        setPendingCount((c) => Math.max(0, c - 1));
+      }
+    },
+    [roomId, roomCode, mySeat, myName, sendChat, queryClient],
+  );
+
+  const messages = useMemo(() => mergeChatMessages(serverChat ?? [], liveMessages), [serverChat, liveMessages]);
+
+  return useMemo(
+    () => ({ messages, onSend, sending: pendingCount > 0 }),
+    [messages, onSend, pendingCount],
+  );
+}
+
 function RoomPage() {
   const { code } = Route.useParams();
   const { user } = Route.useRouteContext();
@@ -68,7 +164,9 @@ function RoomPage() {
   const queryClient = useQueryClient();
   const roomState = useQuery(roomQuery(code));
   const room = roomState.data ?? null;
+  const me = room?.players.find((p) => p.user_id === user.id);
   useLiveRoom(room, code);
+  const chat = useRoomChat(room, me?.seat, me?.display_name);
 
   useEffect(() => {
     if (!roomState.isError || !isAuthFailure(roomState.error)) return;
@@ -126,11 +224,9 @@ function RoomPage() {
     );
   }
 
-  if (!room) return <JoinRoom code={code} user={user} />;
-  const me = room.players.find((p) => p.user_id === user.id);
-  if (!me) return <JoinRoom code={code} user={user} />;
-  if (room.status === "lobby" || !room.state) return <Lobby room={room} userId={user.id} />;
-  return <OnlineGame room={room} seat={me.seat} isHost={room.host_id === user.id} />;
+  if (!room || !me) return <JoinRoom code={code} user={user} />;
+  if (room.status === "lobby" || !room.state) return <Lobby room={room} userId={user.id} viewerSeat={me.seat} chat={chat} />;
+  return <OnlineGame room={room} seat={me.seat} isHost={room.host_id === user.id} chat={chat} />;
 }
 
 function JoinRoom({ code, user }: { code: string; user: AuthUserLike }) {
@@ -208,7 +304,17 @@ function JoinRoom({ code, user }: { code: string; user: AuthUserLike }) {
   );
 }
 
-function Lobby({ room, userId }: { room: Room; userId: string }) {
+function Lobby({
+  room,
+  userId,
+  viewerSeat,
+  chat,
+}: {
+  room: Room;
+  userId: string;
+  viewerSeat: number;
+  chat: OnlineChatConfig;
+}) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isHost = room.host_id === userId;
@@ -226,6 +332,8 @@ function Lobby({ room, userId }: { room: Room; userId: string }) {
         return;
       }
       await queryClient.invalidateQueries({ queryKey: ["room", room.code] });
+      void queryClient.invalidateQueries({ queryKey: ["open-lobbies"] });
+      void queryClient.invalidateQueries({ queryKey: ["my-rooms"] });
     },
     onError: () => toast.error("Could not start the game. Please try again."),
   });
@@ -238,6 +346,7 @@ function Lobby({ room, userId }: { room: Room; userId: string }) {
       }
       queryClient.removeQueries({ queryKey: ["room", room.code] });
       void queryClient.invalidateQueries({ queryKey: ["my-rooms"] });
+      void queryClient.invalidateQueries({ queryKey: ["open-lobbies"] });
       void navigate({ to: "/online" });
     },
   });
@@ -266,7 +375,12 @@ function Lobby({ room, userId }: { room: Room; userId: string }) {
     <div className="min-h-screen">
       <OnlineHeader />
       <main className="mx-auto max-w-xl px-4 py-8 sm:py-12">
-        <p className="text-sm uppercase tracking-[0.3em] text-muted-foreground">Lobby</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm uppercase tracking-[0.3em] text-muted-foreground">Lobby</p>
+          <Link to="/online" className="text-sm text-muted-foreground hover:text-foreground">
+            ← All rooms &amp; lobbies
+          </Link>
+        </div>
         <div className="mt-3 overflow-hidden rounded-2xl border border-border bg-card">
           <div className="h-2 bg-danfo" />
           <div className="p-5 text-center">
@@ -339,6 +453,16 @@ function Lobby({ room, userId }: { room: Room; userId: string }) {
         </ul>
 
         <div className="mt-6">
+          <OnlineChat
+            title="Lobby chat"
+            messages={chat.messages}
+            viewerSeat={viewerSeat}
+            onSend={chat.onSend}
+            sending={chat.sending}
+          />
+        </div>
+
+        <div className="mt-6">
           {isHost ? (
             <>
               <Button
@@ -376,7 +500,17 @@ function Lobby({ room, userId }: { room: Room; userId: string }) {
   );
 }
 
-function OnlineGame({ room, seat, isHost }: { room: Room; seat: number; isHost: boolean }) {
+function OnlineGame({
+  room,
+  seat,
+  isHost,
+  chat,
+}: {
+  room: Room;
+  seat: number;
+  isHost: boolean;
+  chat: OnlineChatConfig;
+}) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const move = useServerFn(sendMove);
@@ -406,8 +540,8 @@ function OnlineGame({ room, seat, isHost }: { room: Room; seat: number; isHost: 
   }, [end, room.id, room.code, queryClient]);
 
   const online = useMemo<OnlinePlay>(
-    () => ({ seat, code: room.code, send, onEnd: isHost ? () => void onEnd() : undefined }),
-    [seat, room.code, send, isHost, onEnd],
+    () => ({ seat, code: room.code, send, onEnd: isHost ? () => void onEnd() : undefined, chat }),
+    [seat, room.code, send, isHost, onEnd, chat],
   );
   const back = () => navigate({ to: "/online" });
   if (!room.state) return null;

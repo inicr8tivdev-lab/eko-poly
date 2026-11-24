@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import type { GameState } from "@/game/engine";
+import { extractChatMessages } from "./chat";
 
 interface LocalUser {
   id: string;
@@ -259,7 +260,8 @@ export function getLocalRoomForUser(userId: string, code: string) {
     status: game.status as "lobby" | "playing" | "finished",
     host_id: game.host_id,
     max_rounds: game.max_rounds,
-    state: game.state,
+    state: game.status === "lobby" ? null : game.state,
+    chat: extractChatMessages(game.state),
     version: game.version,
     winner_name: game.winner_name,
     players,
@@ -272,17 +274,40 @@ export function listLocalRoomsForUser(userId: string) {
   return store.games
     .filter((g) => myGameIds.has(g.id) && g.mode === "online" && (g.status === "lobby" || g.status === "playing"))
     .sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1))
-    .slice(0, 10)
+    .slice(0, 30)
     .map((g) => ({
       id: g.id,
       code: g.code,
       status: g.status,
+      max_rounds: g.max_rounds,
+      host_id: g.host_id,
       updated_at: g.updated_at,
       game_players: store.game_players
         .filter((p) => p.game_id === g.id)
         .sort((a, b) => a.seat - b.seat)
-        .map((p) => ({ display_name: p.display_name })),
+        .map((p) => ({ display_name: p.display_name, user_id: p.user_id, seat: p.seat })),
     }));
+}
+
+export function listLocalOpenLobbies() {
+  const store = loadStore();
+  return store.games
+    .filter((g) => g.mode === "online" && g.status === "lobby" && Boolean(g.code))
+    .map((g) => ({
+      id: g.id,
+      code: g.code,
+      status: g.status,
+      max_rounds: g.max_rounds,
+      host_id: g.host_id,
+      updated_at: g.updated_at,
+      game_players: store.game_players
+        .filter((p) => p.game_id === g.id)
+        .sort((a, b) => a.seat - b.seat)
+        .map((p) => ({ display_name: p.display_name, user_id: p.user_id, seat: p.seat })),
+    }))
+    .filter((g) => g.game_players.length > 0 && g.game_players.length < 4)
+    .sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1))
+    .slice(0, 50);
 }
 
 export function getLocalProfileName(userId: string): string {

@@ -155,4 +155,63 @@ describe("GameScreen mobile & online play controls", () => {
     expect(screen.getByRole("button", { name: "Turn music off" })).toHaveAttribute("aria-pressed", "true");
     expect(window.localStorage.getItem("ekopoly-music-v1")).toBe("true");
   });
+
+  it("renders online table chat, sends messages and quick banter, and tracks unread count on mobile", () => {
+    const onSend = vi.fn();
+    const game = makeOnlineGame();
+    const initialMessages = [
+      { id: "m1", seat: 1, sender: "Tunde", text: "Who get Lekki?", sentAt: "2026-11-24T07:00:00.000Z" },
+    ];
+
+    const { rerender } = render(
+      <GameScreen
+        game={game}
+        setGame={() => {}}
+        onQuit={() => {}}
+        onNewGame={() => {}}
+        online={{
+          seat: 0,
+          code: "ABC234",
+          send: async () => {},
+          chat: { messages: initialMessages, onSend },
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Who get Lekki?")).toBeInTheDocument();
+
+    const input = screen.getByLabelText("Chat message");
+    fireEvent.change(input, { target: { value: "I dey come!" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send chat message" }));
+    expect(onSend).toHaveBeenCalledWith("I dey come!");
+
+    fireEvent.click(screen.getByRole("button", { name: "Oya roll!" }));
+    expect(onSend).toHaveBeenCalledWith("Oya roll!");
+
+    // Incoming remote message increments unread badge on mobile chat trigger while drawer is closed.
+    rerender(
+      <GameScreen
+        game={game}
+        setGame={() => {}}
+        onQuit={() => {}}
+        onNewGame={() => {}}
+        online={{
+          seat: 0,
+          code: "ABC234",
+          send: async () => {},
+          chat: {
+            messages: [
+              ...initialMessages,
+              { id: "m2", seat: 1, sender: "Tunde", text: "Pay rent!", sentAt: "2026-11-24T07:01:00.000Z" },
+            ],
+            onSend,
+          },
+        }}
+      />,
+    );
+
+    const mobileChatBtn = screen.getByRole("button", { name: "Open table chat (1 unread)" });
+    fireEvent.click(mobileChatBtn);
+    expect(screen.getByRole("button", { name: "Close chat" })).toBeInTheDocument();
+  });
 });

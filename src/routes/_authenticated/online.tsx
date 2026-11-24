@@ -2,18 +2,25 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
-import { AlertCircle, ArrowRight, Loader2, LogIn, Plus, RefreshCw, Users } from "lucide-react";
+import { AlertCircle, ArrowRight, Globe, Loader2, LogIn, Plus, RefreshCw, Users } from "lucide-react";
 import { toast } from "sonner";
 import { AvatarPicker } from "@/components/game/AvatarPicker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { OnlineHeader } from "@/components/online/OnlineHeader";
-import { supabase } from "@/lib/supabase";
+import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { loadSavedAvatar, saveLocalAvatar } from "@/lib/avatar";
 import { fallbackPlayerName } from "@/lib/profile";
-import { isAuthFailure, isMissingSchemaError, myAvatarQuery, myNameQuery, myRoomsQuery } from "@/lib/room-queries";
-import { CODE_LENGTH, normalizeCode } from "@/lib/rooms";
+import {
+  isAuthFailure,
+  isMissingSchemaError,
+  myAvatarQuery,
+  myNameQuery,
+  myRoomsQuery,
+  openLobbiesQuery,
+} from "@/lib/room-queries";
+import { CODE_LENGTH, MAX_PLAYERS, normalizeCode } from "@/lib/rooms";
 import { createRoom, joinRoom, updateMyAvatar } from "@/lib/rooms.functions";
 import { cn } from "@/lib/utils";
 
@@ -27,9 +34,9 @@ export const Route = createFileRoute("/_authenticated/online")({
   head: () => ({
     meta: [
       { title: "Play online — Ekopoly" },
-      { name: "description", content: "Create a private Ekopoly room or join one with a code from your friend." },
+      { name: "description", content: "Create an Ekopoly room, browse open lobbies looking for players, or join with a code." },
       { property: "og:title", content: "Play Ekopoly online with friends" },
-      { property: "og:description", content: "Private rooms for up to 4 friends, each on their own phone." },
+      { property: "og:description", content: "Create rooms or join open Ekopoly lobbies for up to 4 players." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "robots", content: "noindex" },
@@ -37,37 +44,69 @@ export const Route = createFileRoute("/_authenticated/online")({
   }),
   loader: ({ context }) => {
     void context.queryClient.prefetchQuery(myRoomsQuery(context.user.id));
+    void context.queryClient.prefetchQuery(openLobbiesQuery());
     void context.queryClient.prefetchQuery(myAvatarQuery(context.user.id));
     void context.queryClient.prefetchQuery(myNameQuery(context.user.id));
   },
   component: OnlinePage,
 });
 
+function useLiveOnlineLobbies(userId: string) {
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+    const refresh = () => {
+      void queryClient.invalidateQueries({ queryKey: ["open-lobbies"] });
+      void queryClient.invalidateQueries({ queryKey: ["my-rooms", userId] });
+    };
+    const channel = supabase
+      .channel(`online-lobbies-${userId}-${Math.random().toString(36).slice(2)}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "games", filter: "mode=eq.online" }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "game_players" }, refresh)
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [userId, queryClient]);
+}
+
 function OnlinePage() {
   const { user } = Route.useRouteContext();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  useLiveOnlineLobbies(user.id);
+
   const defaultName = fallbackPlayerName(user);
   const { data: savedName = "" } = useQuery(myNameQuery(user.id));
   const { data: savedAvatar } = useQuery(myAvatarQuery(user.id));
   const roomsQuery = useQuery(myRoomsQuery(user.id));
+  const lobbiesQuery = useQuery(openLobbiesQuery());
   const rooms = roomsQuery.data ?? [];
+  const lobbies = lobbiesQuery.data ?? [];
+
   const [name, setName] = useState(savedName || defaultName);
   const [avatar, setAvatar] = useState<string | null>(savedAvatar ?? null);
   const [length, setLength] = useState<number | null>(30);
   const [code, setCode] = useState("");
+  const [joiningLobbyCode, setJoiningLobbyCode] = useState<string | null>(null);
+
   useEffect(() => setName((n) => n || savedName || defaultName), [savedName, defaultName]);
   useEffect(() => {
     const local = loadSavedAvatar();
     setAvatar((prev) => prev ?? savedAvatar ?? local ?? null);
   }, [savedAvatar]);
+
   useEffect(() => {
-    if (!roomsQuery.isError || !isAuthFailure(roomsQuery.error)) return;
+    const authErr =
+      (roomsQuery.isError && isAuthFailure(roomsQuery.error)) ||
+      (lobbiesQuery.isError && isAuthFailure(lobbiesQuery.error));
+    if (!authErr) return;
     let active = true;
     void supabase.auth.refreshSession().then(async ({ data, error }) => {
       if (!active) return;
       if (!error && data.session) {
         void queryClient.invalidateQueries({ queryKey: ["my-rooms"] });
+        void queryClient.invalidateQueries({ queryKey: ["open-lobbies"] });
         return;
       }
       await supabase.auth.signOut().catch(() => {});
@@ -76,7 +115,7 @@ function OnlinePage() {
     return () => {
       active = false;
     };
-  }, [roomsQuery.isError, roomsQuery.error, navigate, queryClient]);
+  }, [roomsQuery.isError, roomsQuery.error, lobbiesQuery.isError, lobbiesQuery.error, navigate, queryClient]);
 
   const create = useServerFn(createRoom);
   const join = useServerFn(joinRoom);
@@ -108,6 +147,7 @@ function OnlinePage() {
     onSuccess: (r) => {
       if (r.ok) {
         void queryClient.invalidateQueries({ queryKey: ["my-rooms", user.id] });
+        void queryClient.invalidateQueries({ queryKey: ["open-lobbies"] });
         void queryClient.invalidateQueries({ queryKey: ["my-name", user.id] });
         void go(r.code);
       } else {
@@ -124,11 +164,20 @@ function OnlinePage() {
       toast.error("Could not create the room. Please try again.");
     },
   });
+
   const joinM = useMutation({
-    mutationFn: () => join({ data: { code, name, avatar } }),
+    mutationFn: (targetCode?: string) => join({ data: { code: targetCode ?? code, name, avatar } }),
+    onMutate: (targetCode) => {
+      setJoiningLobbyCode(targetCode ?? null);
+    },
     onSuccess: (r) => {
-      if (r.ok) void go(r.code);
-      else toast.error(r.error);
+      if (r.ok) {
+        void queryClient.invalidateQueries({ queryKey: ["my-rooms", user.id] });
+        void queryClient.invalidateQueries({ queryKey: ["open-lobbies"] });
+        void go(r.code);
+      } else {
+        toast.error(r.error);
+      }
     },
     onError: (err) => {
       console.error("joinRoom error", err);
@@ -139,9 +188,14 @@ function OnlinePage() {
       }
       toast.error("Could not join the room. Please try again.");
     },
+    onSettled: () => {
+      setJoiningLobbyCode(null);
+    },
   });
 
-  const missingSchema = roomsQuery.isError && isMissingSchemaError(roomsQuery.error);
+  const missingSchema =
+    (roomsQuery.isError && isMissingSchemaError(roomsQuery.error)) ||
+    (lobbiesQuery.isError && isMissingSchemaError(lobbiesQuery.error));
 
   return (
     <div className="min-h-screen">
@@ -149,7 +203,7 @@ function OnlinePage() {
       <main className="mx-auto max-w-2xl px-4 py-8 sm:py-12">
         <h1 className="font-display text-3xl font-black tracking-tight sm:text-4xl">Play with friends</h1>
         <p className="mt-2 text-muted-foreground">
-          Make a private room, send the code to your people, and everyone plays from their own phone.
+          Create as many rooms as you want, join any open lobby looking for players, or enter a room code directly.
         </p>
 
         {missingSchema && (
@@ -162,7 +216,14 @@ function OnlinePage() {
                 <code>game_results</code> tables yet. Run the schema SQL in your Supabase SQL Editor, then refresh.
               </p>
             </div>
-            <Button variant="secondary" size="sm" onClick={() => void roomsQuery.refetch()}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                void roomsQuery.refetch();
+                void lobbiesQuery.refetch();
+              }}
+            >
               <RefreshCw className="size-3.5" /> Retry
             </Button>
           </div>
@@ -229,13 +290,13 @@ function OnlinePage() {
 
           <section className="rounded-2xl border border-border bg-card p-5">
             <h2 className="flex items-center gap-2 font-display text-sm font-bold uppercase tracking-widest">
-              <LogIn className="size-4 text-primary" /> Join a room
+              <LogIn className="size-4 text-primary" /> Join with code
             </h2>
             <form
               className="mt-3"
               onSubmit={(e) => {
                 e.preventDefault();
-                joinM.mutate();
+                joinM.mutate(undefined);
               }}
             >
               <Label htmlFor="code" className="text-xs text-muted-foreground">
@@ -257,11 +318,104 @@ function OnlinePage() {
                 className="mt-4 w-full"
                 disabled={joinM.isPending || code.length !== CODE_LENGTH || !name.trim()}
               >
-                {joinM.isPending ? <Loader2 className="animate-spin" /> : <ArrowRight />} Join
+                {joinM.isPending && joiningLobbyCode === null ? <Loader2 className="animate-spin" /> : <ArrowRight />} Join
               </Button>
             </form>
           </section>
         </div>
+
+        <section className="mt-8" aria-labelledby="open-lobbies-heading">
+          <div className="flex items-center justify-between gap-2">
+            <h2
+              id="open-lobbies-heading"
+              className="flex items-center gap-2 font-display text-sm font-bold uppercase tracking-widest text-muted-foreground"
+            >
+              <Globe className="size-4 text-primary" />
+              Open lobbies looking for players
+              {lobbies.length > 0 && (
+                <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-bold text-primary">
+                  {lobbies.length}
+                </span>
+              )}
+            </h2>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 text-xs text-muted-foreground"
+              onClick={() => void lobbiesQuery.refetch()}
+              disabled={lobbiesQuery.isFetching}
+              aria-label="Refresh open lobbies"
+            >
+              <RefreshCw className={cn("size-3.5", lobbiesQuery.isFetching && "animate-spin")} />
+              Refresh
+            </Button>
+          </div>
+
+          {lobbiesQuery.isError && !missingSchema && !isAuthFailure(lobbiesQuery.error) ? (
+            <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm">
+              <span className="text-muted-foreground">Couldn't load open lobbies right now.</span>
+              <Button variant="secondary" size="sm" onClick={() => void lobbiesQuery.refetch()}>
+                Try again
+              </Button>
+            </div>
+          ) : lobbiesQuery.isLoading && lobbies.length === 0 ? (
+            <div className="mt-3 flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-4 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin text-primary" /> Looking for active lobbies…
+            </div>
+          ) : lobbies.length === 0 ? (
+            <div className="mt-3 rounded-xl border border-dashed border-border bg-card/50 px-4 py-5 text-center text-sm text-muted-foreground">
+              No open lobbies looking for players right now — create a room above and wait for others to join!
+            </div>
+          ) : (
+            <ul className="mt-3 space-y-2">
+              {lobbies.map((lobby) => {
+                const players = lobby.game_players ?? [];
+                const playerCount = players.length;
+                const spotsLeft = Math.max(0, MAX_PLAYERS - playerCount);
+                const isMember = players.some((p) => p.user_id === user.id);
+                const roundText = lobby.max_rounds ? `${lobby.max_rounds} rounds` : "Endless";
+                const isJoiningThis = joinM.isPending && joiningLobbyCode === lobby.code;
+
+                return (
+                  <li
+                    key={lobby.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 transition hover:border-primary/60"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-base font-bold tracking-widest text-primary">{lobby.code}</span>
+                        <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold text-secondary-foreground">
+                          {playerCount}/{MAX_PLAYERS} · {spotsLeft} {spotsLeft === 1 ? "spot" : "spots"} left
+                        </span>
+                        <span className="text-xs text-muted-foreground">{roundText}</span>
+                      </div>
+                      <p className="mt-1 truncate text-sm text-muted-foreground">
+                        {players.map((p) => p.display_name).join(", ")}
+                      </p>
+                    </div>
+                    {isMember ? (
+                      <Button variant="secondary" size="sm" asChild>
+                        <Link to="/room/$code" params={{ code: lobby.code }}>
+                          Open lobby
+                        </Link>
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="go"
+                        size="sm"
+                        disabled={joinM.isPending || !name.trim()}
+                        onClick={() => joinM.mutate(lobby.code)}
+                      >
+                        {isJoiningThis ? <Loader2 className="animate-spin" /> : <ArrowRight />}
+                        Join
+                      </Button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
 
         {roomsQuery.isError && !missingSchema && !isAuthFailure(roomsQuery.error) && (
           <div className="mt-6 flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm">
@@ -273,8 +427,13 @@ function OnlinePage() {
         )}
 
         {rooms.length > 0 && (
-          <section className="mt-8">
-            <h2 className="font-display text-sm font-bold uppercase tracking-widest text-muted-foreground">Your rooms</h2>
+          <section className="mt-8" aria-labelledby="your-rooms-heading">
+            <h2
+              id="your-rooms-heading"
+              className="font-display text-sm font-bold uppercase tracking-widest text-muted-foreground"
+            >
+              Your rooms ({rooms.length})
+            </h2>
             <ul className="mt-3 space-y-2">
               {rooms.map((r) => (
                 <li key={r.id}>
@@ -286,6 +445,9 @@ function OnlinePage() {
                     <span className="font-mono text-base tracking-widest text-primary">{r.code}</span>
                     <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
                       {(r.game_players ?? []).map((p) => p.display_name).join(", ")}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {(r.game_players ?? []).length}/{MAX_PLAYERS}
                     </span>
                     <span
                       className={cn(

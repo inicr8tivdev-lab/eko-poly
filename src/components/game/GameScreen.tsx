@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { LogOut, Square, Trophy, Volume2, VolumeX } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LogOut, MessageSquare, Square, Trophy, Volume2, VolumeX } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,6 +31,7 @@ import { ActionBar, CenterPanel } from "./CenterPanel";
 import icon from "@/assets/ekopoly-icon.png";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { GameLog, PlayersPanel, SpaceDetails } from "./Sidebar";
+import { OnlineChat, type OnlineChatConfig } from "./OnlineChat";
 import { TradeDialog, type TradeDraft } from "./TradeDialog";
 
 /** Online play: moves go to the server instead of being applied on this device. */
@@ -40,6 +41,7 @@ export interface OnlinePlay {
   send: (a: Action) => Promise<void>;
   /** Set only for the room creator: stops the game for everyone. */
   onEnd?: (() => void) | undefined;
+  chat?: OnlineChatConfig | undefined;
 }
 
 const FALLBACK: Record<string, Action> = {
@@ -84,7 +86,26 @@ export function GameScreen({
     (viewer === undefined || viewer === game.current) &&
     (game.phase === "roll" || game.phase === "end" || game.phase === "debt");
   const [selected, setSelected] = useState<number>(playerAt(game, game.current).position);
+  const [chatOpen, setChatOpen] = useState(false);
+  const rawChatMessages = online?.chat?.messages;
+  const chatMessages = useMemo(() => rawChatMessages ?? [], [rawChatMessages]);
+  const [seenChatCount, setSeenChatCount] = useState(chatMessages.length);
   const timers = useRef<number[]>([]);
+
+  useEffect(() => {
+    if (chatOpen) {
+      setSeenChatCount(chatMessages.length);
+      return;
+    }
+    const last = chatMessages[chatMessages.length - 1];
+    if (last && online && last.seat === online.seat) {
+      setSeenChatCount(chatMessages.length);
+    } else if (chatMessages.length < seenChatCount) {
+      setSeenChatCount(chatMessages.length);
+    }
+  }, [chatOpen, chatMessages, online, seenChatCount]);
+
+  const unreadChat = chatOpen ? 0 : Math.max(0, chatMessages.length - seenChatCount);
 
   useEffect(() => {
     setSoundOn(isSoundEnabled());
@@ -233,6 +254,24 @@ export function GameScreen({
           )}
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          {online?.chat && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="relative lg:hidden"
+              onClick={() => setChatOpen((o) => !o)}
+              aria-label={unreadChat > 0 ? `Open table chat (${unreadChat} unread)` : "Open table chat"}
+              aria-expanded={chatOpen}
+            >
+              <MessageSquare />
+              {unreadChat > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+                  {unreadChat > 9 ? "9+" : unreadChat}
+                </span>
+              )}
+            </Button>
+          )}
           <MusicToggle />
           <Button
             variant="ghost"
@@ -305,10 +344,40 @@ export function GameScreen({
                 : undefined
             }
           />
+          {online?.chat && (
+            <div className="hidden lg:block">
+              <OnlineChat
+                messages={online.chat.messages}
+                viewerSeat={online.seat}
+                onSend={online.chat.onSend}
+                sending={online.chat.sending}
+              />
+            </div>
+          )}
           <SpaceDetails state={game} index={selected} dispatch={dispatch} viewer={viewer} busy={rolling || sending} />
           <GameLog state={game} />
         </aside>
       </main>
+
+      {online?.chat && chatOpen && (
+        <div
+          className="fixed inset-0 z-40 flex items-end justify-center bg-background/75 p-3 backdrop-blur-xs lg:hidden"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setChatOpen(false);
+          }}
+        >
+          <div className="w-full max-w-md">
+            <OnlineChat
+              autoFocus
+              messages={online.chat.messages}
+              viewerSeat={online.seat}
+              onSend={online.chat.onSend}
+              sending={online.chat.sending}
+              onClose={() => setChatOpen(false)}
+            />
+          </div>
+        </div>
+      )}
 
       <TradeDialog
         state={game}
