@@ -1,11 +1,29 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { canAct, createGame, endGameEarly, netWorth, reduce, rollDice, type Action, type GameState } from "@/game/engine";
+import {
+  canAct,
+  createGame,
+  endGameEarly,
+  netWorth,
+  reduce,
+  rollDice,
+  type Action,
+  type GameState,
+} from "@/game/engine";
 import { getPublicSupabaseConfig } from "@/integrations/supabase/publicConfig";
 import { isValidAvatar } from "./avatar";
 import { appendChatMessage, cleanChatText, extractChatMessages, type ChatMessage } from "./chat";
-import { MAX_PLAYERS, MIN_PLAYERS, actionSchema, cleanName, isValidCode, makeCode, nextFreeSeat, normalizeCode } from "./rooms";
+import {
+  MAX_PLAYERS,
+  MIN_PLAYERS,
+  actionSchema,
+  cleanName,
+  isValidCode,
+  makeCode,
+  nextFreeSeat,
+  normalizeCode,
+} from "./rooms";
 
 const avatarSchema = z
   .string()
@@ -16,16 +34,26 @@ const avatarSchema = z
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
-function isMissingTableError(error: { code?: string; message?: string } | null | undefined): boolean {
+function isMissingTableError(
+  error: { code?: string; message?: string } | null | undefined,
+): boolean {
   if (!error) return false;
   const code = (error.code ?? "").toUpperCase();
   const msg = (error.message ?? "").toLowerCase();
-  return code === "PGRST205" || code === "42P01" || msg.includes("schema cache") || msg.includes("does not exist");
+  return (
+    code === "PGRST205" ||
+    code === "42P01" ||
+    msg.includes("schema cache") ||
+    msg.includes("does not exist")
+  );
 }
 
 function isLocalContext(claims: unknown): boolean {
   return Boolean(
-    claims && typeof claims === "object" && "iss" in claims && (claims as { iss?: unknown }).iss === "ekopoly-local",
+    claims &&
+    typeof claims === "object" &&
+    "iss" in claims &&
+    (claims as { iss?: unknown }).iss === "ekopoly-local",
   );
 }
 
@@ -35,9 +63,12 @@ function isRemoteSupabaseEnv(): boolean {
 
 async function admin(fallback?: unknown, claims?: unknown) {
   if (isLocalContext(claims) && fallback) {
-    return fallback as Awaited<typeof import("@/integrations/supabase/client.server")>["supabaseAdmin"];
+    return fallback as Awaited<
+      typeof import("@/integrations/supabase/client.server")
+    >["supabaseAdmin"];
   }
-  const { isSupabaseAdminConfigured, supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { isSupabaseAdminConfigured, supabaseAdmin } =
+    await import("@/integrations/supabase/client.server");
   if (!isSupabaseAdminConfigured() && isRemoteSupabaseEnv() && fallback) {
     return fallback as typeof supabaseAdmin;
   }
@@ -65,7 +96,8 @@ async function saveAvatarIfLocal(
   if (avatar === undefined) return;
   const { isSupabaseAdminConfigured } = await import("@/integrations/supabase/client.server");
   if (!isLocalContext(claims) && (isSupabaseAdminConfigured() || isRemoteSupabaseEnv())) return;
-  const { setLocalProfileAvatar, setLocalRoomPlayerAvatar } = await import("./local-online-store.server");
+  const { setLocalProfileAvatar, setLocalRoomPlayerAvatar } =
+    await import("./local-online-store.server");
   if (gameId) setLocalRoomPlayerAvatar(userId, gameId, avatar);
   else setLocalProfileAvatar(userId, avatar);
 }
@@ -89,14 +121,22 @@ export const createRoom = createServerFn({ method: "POST" })
     for (let attempt = 0; attempt < 5; attempt++) {
       const code = makeCode(crypto.getRandomValues(new Uint32Array(8)));
       const gameId = crypto.randomUUID();
-      const { error } = await db
-        .from("games")
-        .insert({ id: gameId, host_id: context.userId, mode: "online", status: "lobby", code, max_rounds: data.maxRounds });
+      const { error } = await db.from("games").insert({
+        id: gameId,
+        host_id: context.userId,
+        mode: "online",
+        status: "lobby",
+        code,
+        max_rounds: data.maxRounds,
+      });
       if (error?.code === "23505") continue; // code already used, try another
       if (error) {
         console.error("createRoom", error);
         if (isMissingTableError(error)) {
-          return { ok: false, error: "Database tables are not set up yet on this Supabase project." };
+          return {
+            ok: false,
+            error: "Database tables are not set up yet on this Supabase project.",
+          };
         }
         return { ok: false, error: "Could not create the room. Please try again." };
       }
@@ -107,7 +147,10 @@ export const createRoom = createServerFn({ method: "POST" })
         console.error("createRoom playerErr", playerErr);
         await db.from("games").delete().eq("id", gameId);
         if (isMissingTableError(playerErr)) {
-          return { ok: false, error: "Database tables are not set up yet on this Supabase project." };
+          return {
+            ok: false,
+            error: "Database tables are not set up yet on this Supabase project.",
+          };
         }
         return { ok: false, error: "Could not create the room. Please try again." };
       }
@@ -124,7 +167,11 @@ export const joinRoom = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }): Promise<Result<{ code: string }>> => {
     const code = normalizeCode(data.code);
-    if (!isValidCode(code)) return { ok: false, error: "That code doesn't look right. Codes have 6 letters and numbers." };
+    if (!isValidCode(code))
+      return {
+        ok: false,
+        error: "That code doesn't look right. Codes have 6 letters and numbers.",
+      };
     const db = await admin(context.supabase, context.claims);
     const { data: game, error: gameErr } = await db
       .from("games")
@@ -141,21 +188,28 @@ export const joinRoom = createServerFn({ method: "POST" })
     }
     if (!game) return { ok: false, error: "No room with that code. Check it with your friend." };
 
-    const { data: players } = await db.from("game_players").select("user_id, seat").eq("game_id", game.id);
+    const { data: players } = await db
+      .from("game_players")
+      .select("user_id, seat")
+      .eq("game_id", game.id);
     const list = players ?? [];
     if (list.some((p) => p.user_id === context.userId)) {
-      if (game.status === "lobby") await saveAvatarIfLocal(context.userId, data.avatar, game.id, context.claims);
+      if (game.status === "lobby")
+        await saveAvatarIfLocal(context.userId, data.avatar, game.id, context.claims);
       return { ok: true, code };
     }
-    if (game.status !== "lobby") return { ok: false, error: "This game has already started without you." };
-    if (list.length >= MAX_PLAYERS) return { ok: false, error: `This room is full (${MAX_PLAYERS} players max).` };
+    if (game.status !== "lobby")
+      return { ok: false, error: "This game has already started without you." };
+    if (list.length >= MAX_PLAYERS)
+      return { ok: false, error: `This room is full (${MAX_PLAYERS} players max).` };
 
     const name = cleanName(data.name);
     await saveName(context.userId, name, context.supabase, context.claims);
     for (let attempt = 0; attempt < 3; attempt++) {
       const { data: again } = await db.from("game_players").select("seat").eq("game_id", game.id);
       const seat = nextFreeSeat((again ?? []).map((p) => p.seat));
-      if (seat === null) return { ok: false, error: `This room is full (${MAX_PLAYERS} players max).` };
+      if (seat === null)
+        return { ok: false, error: `This room is full (${MAX_PLAYERS} players max).` };
       const { error } = await db
         .from("game_players")
         .insert({ game_id: game.id, user_id: context.userId, seat, display_name: name });
@@ -177,9 +231,14 @@ export const leaveRoom = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ gameId: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }): Promise<Result> => {
     // Reading through the caller's own access confirms they belong to this room.
-    const { data: game } = await context.supabase.from("games").select("id, host_id, status").eq("id", data.gameId).maybeSingle();
+    const { data: game } = await context.supabase
+      .from("games")
+      .select("id, host_id, status")
+      .eq("id", data.gameId)
+      .maybeSingle();
     if (!game) return { ok: false, error: "Room not found." };
-    if (game.status !== "lobby") return { ok: false, error: "The game has started — you can't leave the room now." };
+    if (game.status !== "lobby")
+      return { ok: false, error: "The game has started — you can't leave the room now." };
     const db = await admin(context.supabase, context.claims);
     if (game.host_id === context.userId) {
       await db.from("games").delete().eq("id", game.id);
@@ -200,7 +259,8 @@ export const startRoom = createServerFn({ method: "POST" })
       .eq("id", data.gameId)
       .maybeSingle();
     if (!game) return { ok: false, error: "Room not found." };
-    if (game.host_id !== context.userId) return { ok: false, error: "Only the host can start the game." };
+    if (game.host_id !== context.userId)
+      return { ok: false, error: "Only the host can start the game." };
     if (game.status !== "lobby") return { ok: false, error: "This game has already started." };
 
     const db = await admin(context.supabase, context.claims);
@@ -210,15 +270,24 @@ export const startRoom = createServerFn({ method: "POST" })
       .eq("game_id", game.id)
       .order("seat");
     const list = players ?? [];
-    if (list.length < MIN_PLAYERS) return { ok: false, error: `You need at least ${MIN_PLAYERS} players to start.` };
+    if (list.length < MIN_PLAYERS)
+      return { ok: false, error: `You need at least ${MIN_PLAYERS} players to start.` };
 
     // Close any gaps left by people who left, so seat N is player N in the game.
     for (const [i, p] of list.entries()) {
-      if (p.seat !== i) await db.from("game_players").update({ seat: i }).eq("game_id", game.id).eq("user_id", p.user_id);
+      if (p.seat !== i)
+        await db
+          .from("game_players")
+          .update({ seat: i })
+          .eq("game_id", game.id)
+          .eq("user_id", p.user_id);
     }
     let avatars: Record<string, string | null> = {};
     const { isSupabaseAdminConfigured } = await import("@/integrations/supabase/client.server");
-    if (isLocalContext(context.claims) || (!isSupabaseAdminConfigured() && !isRemoteSupabaseEnv())) {
+    if (
+      isLocalContext(context.claims) ||
+      (!isSupabaseAdminConfigured() && !isRemoteSupabaseEnv())
+    ) {
       const { getLocalRoomPlayerAvatars } = await import("./local-online-store.server");
       avatars = getLocalRoomPlayerAvatars(game.id);
     }
@@ -228,7 +297,8 @@ export const startRoom = createServerFn({ method: "POST" })
       Math.random,
       game.max_rounds,
     );
-    const state: GameState = lobbyChat.length > 0 ? { ...createdState, chat: lobbyChat } : createdState;
+    const state: GameState =
+      lobbyChat.length > 0 ? { ...createdState, chat: lobbyChat } : createdState;
     const { error } = await db
       .from("games")
       .update({ status: "playing", state: state as never, version: 1 })
@@ -243,7 +313,9 @@ export const startRoom = createServerFn({ method: "POST" })
 
 export const sendMove = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ gameId: z.string().uuid(), move: actionSchema }).parse(d))
+  .inputValidator((d: unknown) =>
+    z.object({ gameId: z.string().uuid(), move: actionSchema }).parse(d),
+  )
   .handler(async ({ data, context }): Promise<Result> => {
     const { data: me } = await context.supabase
       .from("game_players")
@@ -257,12 +329,14 @@ export const sendMove = createServerFn({ method: "POST" })
       .select("id, status, state, version")
       .eq("id", data.gameId)
       .maybeSingle();
-    if (!game || game.status !== "playing" || !game.state) return { ok: false, error: "This game isn't running." };
+    if (!game || game.status !== "playing" || !game.state)
+      return { ok: false, error: "This game isn't running." };
 
     const state = game.state as unknown as GameState;
     if (!canAct(state, me.seat)) return { ok: false, error: "Hold on — it's not your move." };
 
-    const action: Action = data.move.type === "roll" ? { type: "roll", dice: rollDice() } : (data.move as Action);
+    const action: Action =
+      data.move.type === "roll" ? { type: "roll", dice: rollDice() } : (data.move as Action);
     const next = reduce(state, action);
     if (next === state) return { ok: false, error: "That move isn't allowed right now." };
 
@@ -283,7 +357,8 @@ export const sendMove = createServerFn({ method: "POST" })
       console.error("sendMove", error);
       return { ok: false, error: "Could not save that move. Please try again." };
     }
-    if (!saved?.length) return { ok: false, error: "Someone moved at the same time — the board has been refreshed." };
+    if (!saved?.length)
+      return { ok: false, error: "Someone moved at the same time — the board has been refreshed." };
 
     if (finished) await saveResults(game.id, next, context.supabase, context.claims);
     return { ok: true };
@@ -361,7 +436,10 @@ export const sendChatMessage = createServerFn({ method: "POST" })
 
 async function saveResults(gameId: string, next: GameState, fallback?: unknown, claims?: unknown) {
   const db = await admin(fallback, claims);
-  const { data: players } = await db.from("game_players").select("user_id, seat, display_name").eq("game_id", gameId);
+  const { data: players } = await db
+    .from("game_players")
+    .select("user_id, seat, display_name")
+    .eq("game_id", gameId);
   await db.from("game_results").insert(
     (players ?? []).map((p) => ({
       game_id: gameId,
@@ -384,18 +462,26 @@ export const endRoom = createServerFn({ method: "POST" })
       .eq("id", data.gameId)
       .maybeSingle();
     if (!game) return { ok: false, error: "Room not found." };
-    if (game.host_id !== context.userId) return { ok: false, error: "Only the room creator can end the game." };
-    if (game.status !== "playing" || !game.state) return { ok: false, error: "This game isn't running." };
+    if (game.host_id !== context.userId)
+      return { ok: false, error: "Only the room creator can end the game." };
+    if (game.status !== "playing" || !game.state)
+      return { ok: false, error: "This game isn't running." };
     const next = endGameEarly(game.state as unknown as GameState);
     const winner = next.winner !== null ? next.players[next.winner] : undefined;
     const db = await admin(context.supabase, context.claims);
     const { data: saved, error } = await db
       .from("games")
-      .update({ state: next as never, version: game.version + 1, status: "finished", winner_name: winner?.name ?? null })
+      .update({
+        state: next as never,
+        version: game.version + 1,
+        status: "finished",
+        winner_name: winner?.name ?? null,
+      })
       .eq("id", game.id)
       .eq("version", game.version)
       .select("id");
-    if (error || !saved?.length) return { ok: false, error: "Could not end the game. Please try again." };
+    if (error || !saved?.length)
+      return { ok: false, error: "Could not end the game. Please try again." };
     await saveResults(game.id, next, context.supabase, context.claims);
     return { ok: true };
   });
@@ -433,7 +519,8 @@ export const getMyProfileAvatar = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { isSupabaseAdminConfigured } = await import("@/integrations/supabase/client.server");
-    if (!isLocalContext(context.claims) && (isSupabaseAdminConfigured() || isRemoteSupabaseEnv())) return null;
+    if (!isLocalContext(context.claims) && (isSupabaseAdminConfigured() || isRemoteSupabaseEnv()))
+      return null;
     const { getLocalProfileAvatar } = await import("./local-online-store.server");
     return getLocalProfileAvatar(context.userId);
   });

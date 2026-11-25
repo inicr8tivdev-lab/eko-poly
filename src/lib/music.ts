@@ -1,5 +1,6 @@
 const MUSIC_STORAGE_KEY = "ekopoly-music-v1";
-export const MUSIC_TRACK_SRC = "/assets/aistudio/vadim_makes_sound-atlas-nigeria-560364_1ade5cc5.mp3";
+export const MUSIC_TRACK_SRC =
+  "/assets/aistudio/vadim_makes_sound-atlas-nigeria-560364_1ade5cc5.mp3";
 const MUSIC_VOLUME = 0.35;
 
 type MusicListener = (enabled: boolean) => void;

@@ -133,7 +133,10 @@ function signToken(store: LocalStoreData, user: { id: string; email: string }): 
   const header = base64Url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
   const exp = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30;
   const payload = base64Url(JSON.stringify({ sub: user.id, email: user.email, exp }));
-  const sig = crypto.createHmac("sha256", store.secret).update(`${header}.${payload}`).digest("base64url");
+  const sig = crypto
+    .createHmac("sha256", store.secret)
+    .update(`${header}.${payload}`)
+    .digest("base64url");
   return `${header}.${payload}.${sig}`;
 }
 
@@ -144,7 +147,10 @@ export function verifyLocalToken(token: string): { id: string; email: string } |
   if (!header || !payload || !sig) return null;
 
   const store = loadStore();
-  const expected = crypto.createHmac("sha256", store.secret).update(`${header}.${payload}`).digest("base64url");
+  const expected = crypto
+    .createHmac("sha256", store.secret)
+    .update(`${header}.${payload}`)
+    .digest("base64url");
   const sigBuf = Buffer.from(sig);
   const expBuf = Buffer.from(expected);
   if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) return null;
@@ -163,7 +169,36 @@ export function verifyLocalToken(token: string): { id: string; email: string } |
   }
 }
 
-export function localAuthSignUp(emailRaw: string, password: string) {
+function syncClientCredentials(
+  store: LocalStoreData,
+  clientCredentials?: Array<{ email: string; password: string }>,
+) {
+  if (!Array.isArray(clientCredentials)) return;
+  for (const c of clientCredentials) {
+    if (c && typeof c.email === "string" && typeof c.password === "string") {
+      const email = c.email.trim().toLowerCase();
+      const existing = store.users.find((u) => u.email === email);
+      if (!existing) {
+        const now = new Date().toISOString();
+        store.users.push({
+          id: crypto.randomUUID(),
+          email,
+          passwordHash: hashPassword(c.password),
+          createdAt: now,
+        });
+      } else {
+        existing.passwordHash = hashPassword(c.password);
+      }
+    }
+  }
+  saveStore(store);
+}
+
+export function localAuthSignUp(
+  emailRaw: string,
+  password: string,
+  clientCredentials?: Array<{ email: string; password: string }>,
+) {
   const email = emailRaw.trim().toLowerCase();
   if (!email || !email.includes("@")) {
     return { ok: false as const, error: "Please enter a valid email address." };
@@ -172,9 +207,13 @@ export function localAuthSignUp(emailRaw: string, password: string) {
     return { ok: false as const, error: "Password should be at least 6 characters." };
   }
   const store = loadStore();
+  syncClientCredentials(store, clientCredentials);
   const existing = store.users.find((u) => u.email === email);
   if (existing) {
-    return { ok: false as const, error: "An account with this email already exists. Try signing in." };
+    return {
+      ok: false as const,
+      error: "An account with this email already exists. Try signing in.",
+    };
   }
   const now = new Date().toISOString();
   const user: LocalUser = {
@@ -195,9 +234,14 @@ export function localAuthSignUp(emailRaw: string, password: string) {
   };
 }
 
-export function localAuthSignIn(emailRaw: string, password: string) {
+export function localAuthSignIn(
+  emailRaw: string,
+  password: string,
+  clientCredentials?: Array<{ email: string; password: string }>,
+) {
   const email = emailRaw.trim().toLowerCase();
   const store = loadStore();
+  syncClientCredentials(store, clientCredentials);
   const user = store.users.find((u) => u.email === email);
   if (!user || !verifyPassword(password, user.passwordHash)) {
     return { ok: false as const, error: "Invalid login credentials" };
@@ -270,9 +314,16 @@ export function getLocalRoomForUser(userId: string, code: string) {
 
 export function listLocalRoomsForUser(userId: string) {
   const store = loadStore();
-  const myGameIds = new Set(store.game_players.filter((p) => p.user_id === userId).map((p) => p.game_id));
+  const myGameIds = new Set(
+    store.game_players.filter((p) => p.user_id === userId).map((p) => p.game_id),
+  );
   return store.games
-    .filter((g) => myGameIds.has(g.id) && g.mode === "online" && (g.status === "lobby" || g.status === "playing"))
+    .filter(
+      (g) =>
+        myGameIds.has(g.id) &&
+        g.mode === "online" &&
+        (g.status === "lobby" || g.status === "playing"),
+    )
     .sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1))
     .slice(0, 30)
     .map((g) => ({
@@ -339,7 +390,11 @@ export function setLocalProfileAvatar(userId: string, avatar: string | null): vo
   saveStore(store);
 }
 
-export function setLocalRoomPlayerAvatar(userId: string, gameId: string, avatar: string | null): void {
+export function setLocalRoomPlayerAvatar(
+  userId: string,
+  gameId: string,
+  avatar: string | null,
+): void {
   const store = loadStore();
   const now = new Date().toISOString();
   const existing = store.profiles.find((p) => p.id === userId);
@@ -375,7 +430,8 @@ export function getLocalRoomPlayerAvatars(gameId: string): Record<string, string
   return map;
 }
 
-type Filter = { type: "eq"; col: string; val: unknown } | { type: "in"; col: string; vals: unknown[] };
+type Filter =
+  { type: "eq"; col: string; val: unknown } | { type: "in"; col: string; vals: unknown[] };
 type Order = { col: string; ascending: boolean };
 
 function cloneRow<T>(row: T): T {
@@ -402,7 +458,10 @@ export function createLocalDbClient(scopedUserId?: string) {
       let wantSingle: "single" | "maybeSingle" | null = null;
       let wantSelectAfterWrite = false;
 
-      const execute = async (): Promise<{ data: unknown; error: { code?: string; message: string } | null }> => {
+      const execute = async (): Promise<{
+        data: unknown;
+        error: { code?: string; message: string } | null;
+      }> => {
         const store = loadStore();
         const now = new Date().toISOString();
 
@@ -410,7 +469,10 @@ export function createLocalDbClient(scopedUserId?: string) {
           if (mode === "insert") {
             const input = payload as Partial<LocalGameRow>;
             if (input.code && store.games.some((g) => g.code === input.code)) {
-              return { data: null, error: { code: "23505", message: "duplicate key value violates unique constraint" } };
+              return {
+                data: null,
+                error: { code: "23505", message: "duplicate key value violates unique constraint" },
+              };
             }
             const row: LocalGameRow = {
               id: input.id ?? crypto.randomUUID(),
@@ -443,7 +505,9 @@ export function createLocalDbClient(scopedUserId?: string) {
             saveStore(store);
             if (!wantSelectAfterWrite) return { data: null, error: null };
             if (wantSingle === "single") {
-              return updated[0] ? { data: updated[0], error: null } : { data: null, error: { message: "Not found" } };
+              return updated[0]
+                ? { data: updated[0], error: null }
+                : { data: null, error: { message: "Not found" } };
             }
             if (wantSingle === "maybeSingle") return { data: updated[0] ?? null, error: null };
             return { data: updated, error: null };
@@ -466,7 +530,9 @@ export function createLocalDbClient(scopedUserId?: string) {
 
           let rows = store.games.filter((g) => {
             if (scopedUserId) {
-              const isMember = store.game_players.some((p) => p.game_id === g.id && p.user_id === scopedUserId);
+              const isMember = store.game_players.some(
+                (p) => p.game_id === g.id && p.user_id === scopedUserId,
+              );
               if (!isMember && g.host_id !== scopedUserId) return false;
             }
             return matchesFilters(g as unknown as Record<string, unknown>, filters);
@@ -483,7 +549,9 @@ export function createLocalDbClient(scopedUserId?: string) {
           if (limitCount !== null) rows = rows.slice(0, limitCount);
           const cloned = rows.map((r) => cloneRow(r));
           if (wantSingle === "single") {
-            return cloned[0] ? { data: cloned[0], error: null } : { data: null, error: { message: "Not found" } };
+            return cloned[0]
+              ? { data: cloned[0], error: null }
+              : { data: null, error: { message: "Not found" } };
           }
           if (wantSingle === "maybeSingle") return { data: cloned[0] ?? null, error: null };
           return { data: cloned, error: null };
@@ -491,15 +559,22 @@ export function createLocalDbClient(scopedUserId?: string) {
 
         if (table === "game_players") {
           if (mode === "insert") {
-            const items = (Array.isArray(payload) ? payload : [payload]) as Partial<LocalGamePlayerRow>[];
+            const items = (
+              Array.isArray(payload) ? payload : [payload]
+            ) as Partial<LocalGamePlayerRow>[];
             const inserted: LocalGamePlayerRow[] = [];
             for (const item of items) {
               if (
                 store.game_players.some(
-                  (p) => p.game_id === item.game_id && (p.user_id === item.user_id || p.seat === item.seat),
+                  (p) =>
+                    p.game_id === item.game_id &&
+                    (p.user_id === item.user_id || p.seat === item.seat),
                 )
               ) {
-                return { data: null, error: { code: "23505", message: "duplicate seat or player" } };
+                return {
+                  data: null,
+                  error: { code: "23505", message: "duplicate seat or player" },
+                };
               }
               const row: LocalGamePlayerRow = {
                 game_id: item.game_id ?? "",
@@ -535,7 +610,9 @@ export function createLocalDbClient(scopedUserId?: string) {
             return { data: null, error: null };
           }
 
-          let rows = store.game_players.filter((p) => matchesFilters(p as unknown as Record<string, unknown>, filters));
+          let rows = store.game_players.filter((p) =>
+            matchesFilters(p as unknown as Record<string, unknown>, filters),
+          );
           if (orderBy) {
             const { col, ascending } = orderBy;
             rows = [...rows].sort((a, b) => {
@@ -547,7 +624,9 @@ export function createLocalDbClient(scopedUserId?: string) {
           }
           const cloned = rows.map((r) => cloneRow(r));
           if (wantSingle === "single") {
-            return cloned[0] ? { data: cloned[0], error: null } : { data: null, error: { message: "Not found" } };
+            return cloned[0]
+              ? { data: cloned[0], error: null }
+              : { data: null, error: { message: "Not found" } };
           }
           if (wantSingle === "maybeSingle") return { data: cloned[0] ?? null, error: null };
           return { data: cloned, error: null };
@@ -582,7 +661,9 @@ export function createLocalDbClient(scopedUserId?: string) {
 
         if (table === "game_results") {
           if (mode === "insert") {
-            const items = (Array.isArray(payload) ? payload : [payload]) as Partial<LocalGameResultRow>[];
+            const items = (
+              Array.isArray(payload) ? payload : [payload]
+            ) as Partial<LocalGameResultRow>[];
             for (const item of items) {
               store.game_results.push({
                 game_id: item.game_id ?? "",
@@ -650,7 +731,10 @@ export function createLocalDbClient(scopedUserId?: string) {
           return execute();
         },
         then(
-          onFulfilled?: (v: { data: unknown; error: { code?: string; message: string } | null }) => unknown,
+          onFulfilled?: (v: {
+            data: unknown;
+            error: { code?: string; message: string } | null;
+          }) => unknown,
           onRejected?: (e: unknown) => unknown,
         ) {
           return execute().then(onFulfilled, onRejected);

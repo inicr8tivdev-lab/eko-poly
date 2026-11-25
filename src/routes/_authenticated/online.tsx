@@ -2,7 +2,16 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
-import { AlertCircle, ArrowRight, Globe, Loader2, LogIn, Plus, RefreshCw, Users } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowRight,
+  Globe,
+  Loader2,
+  LogIn,
+  Plus,
+  RefreshCw,
+  Users,
+} from "lucide-react";
 import { toast } from "sonner";
 import { AvatarPicker } from "@/components/game/AvatarPicker";
 import { Button } from "@/components/ui/button";
@@ -20,8 +29,10 @@ import {
   myRoomsQuery,
   openLobbiesQuery,
 } from "@/lib/room-queries";
+import { playerStatsQuery } from "@/lib/player-stats";
 import { CODE_LENGTH, MAX_PLAYERS, normalizeCode } from "@/lib/rooms";
 import { createRoom, joinRoom, updateMyAvatar } from "@/lib/rooms.functions";
+import { PlayerProfileStats } from "@/components/online/PlayerProfileStats";
 import { cn } from "@/lib/utils";
 
 const LENGTHS = [
@@ -34,9 +45,16 @@ export const Route = createFileRoute("/_authenticated/online")({
   head: () => ({
     meta: [
       { title: "Play online — Ekopoly" },
-      { name: "description", content: "Create an Ekopoly room, browse open lobbies looking for players, or join with a code." },
+      {
+        name: "description",
+        content:
+          "Create an Ekopoly room, browse open lobbies looking for players, or join with a code.",
+      },
       { property: "og:title", content: "Play Ekopoly online with friends" },
-      { property: "og:description", content: "Create rooms or join open Ekopoly lobbies for up to 4 players." },
+      {
+        property: "og:description",
+        content: "Create rooms or join open Ekopoly lobbies for up to 4 players.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "robots", content: "noindex" },
@@ -45,6 +63,7 @@ export const Route = createFileRoute("/_authenticated/online")({
   loader: ({ context }) => {
     void context.queryClient.prefetchQuery(myRoomsQuery(context.user.id));
     void context.queryClient.prefetchQuery(openLobbiesQuery());
+    void context.queryClient.prefetchQuery(playerStatsQuery(context.user.id));
     void context.queryClient.prefetchQuery(myAvatarQuery(context.user.id));
     void context.queryClient.prefetchQuery(myNameQuery(context.user.id));
   },
@@ -61,7 +80,11 @@ function useLiveOnlineLobbies(userId: string) {
     };
     const channel = supabase
       .channel(`online-lobbies-${userId}-${Math.random().toString(36).slice(2)}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "games", filter: "mode=eq.online" }, refresh)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "games", filter: "mode=eq.online" },
+        refresh,
+      )
       .on("postgres_changes", { event: "*", schema: "public", table: "game_players" }, refresh)
       .subscribe();
     return () => {
@@ -115,7 +138,14 @@ function OnlinePage() {
     return () => {
       active = false;
     };
-  }, [roomsQuery.isError, roomsQuery.error, lobbiesQuery.isError, lobbiesQuery.error, navigate, queryClient]);
+  }, [
+    roomsQuery.isError,
+    roomsQuery.error,
+    lobbiesQuery.isError,
+    lobbiesQuery.error,
+    navigate,
+    queryClient,
+  ]);
 
   const create = useServerFn(createRoom);
   const join = useServerFn(joinRoom);
@@ -132,7 +162,9 @@ function OnlinePage() {
   const go = (c: string) => navigate({ to: "/room/$code", params: { code: c } });
 
   const handleUnauthorizedError = async (fallbackToast: string) => {
-    const { data, error } = await supabase.auth.refreshSession().catch(() => ({ data: { session: null }, error: new Error("refresh failed") }));
+    const { data, error } = await supabase.auth
+      .refreshSession()
+      .catch(() => ({ data: { session: null }, error: new Error("refresh failed") }));
     if (!error && data.session) {
       toast.error(fallbackToast);
       return;
@@ -158,7 +190,9 @@ function OnlinePage() {
       console.error("createRoom error", err);
       const msg = err instanceof Error ? err.message : "";
       if (msg.toLowerCase().includes("unauthorized")) {
-        void handleUnauthorizedError("Couldn't verify your request with the server — please try again.");
+        void handleUnauthorizedError(
+          "Couldn't verify your request with the server — please try again.",
+        );
         return;
       }
       toast.error("Could not create the room. Please try again.");
@@ -183,7 +217,9 @@ function OnlinePage() {
       console.error("joinRoom error", err);
       const msg = err instanceof Error ? err.message : "";
       if (msg.toLowerCase().includes("unauthorized")) {
-        void handleUnauthorizedError("Couldn't verify your request with the server — please try again.");
+        void handleUnauthorizedError(
+          "Couldn't verify your request with the server — please try again.",
+        );
         return;
       }
       toast.error("Could not join the room. Please try again.");
@@ -201,9 +237,12 @@ function OnlinePage() {
     <div className="min-h-screen">
       <OnlineHeader />
       <main className="mx-auto max-w-2xl px-4 py-8 sm:py-12">
-        <h1 className="font-display text-3xl font-black tracking-tight sm:text-4xl">Play with friends</h1>
+        <h1 className="font-display text-3xl font-black tracking-tight sm:text-4xl">
+          Play with friends
+        </h1>
         <p className="mt-2 text-muted-foreground">
-          Create as many rooms as you want, join any open lobby looking for players, or enter a room code directly.
+          Create as many rooms as you want, join any open lobby looking for players, or enter a room
+          code directly.
         </p>
 
         {missingSchema && (
@@ -212,8 +251,9 @@ function OnlinePage() {
             <div className="flex-1">
               <p className="font-semibold text-foreground">Supabase tables not initialized yet</p>
               <p className="mt-1 text-muted-foreground">
-                This Supabase project does not have the <code>games</code>, <code>game_players</code>, <code>profiles</code>, or{" "}
-                <code>game_results</code> tables yet. Run the schema SQL in your Supabase SQL Editor, then refresh.
+                This Supabase project does not have the <code>games</code>,{" "}
+                <code>game_players</code>, <code>profiles</code>, or <code>game_results</code>{" "}
+                tables yet. Run the schema SQL in your Supabase SQL Editor, then refresh.
               </p>
             </div>
             <Button
@@ -230,7 +270,10 @@ function OnlinePage() {
         )}
 
         <div className="mt-6 rounded-2xl border border-border bg-card p-5">
-          <Label htmlFor="name" className="font-display text-xs font-bold uppercase tracking-widest">
+          <Label
+            htmlFor="name"
+            className="font-display text-xs font-bold uppercase tracking-widest"
+          >
             Your profile at the table
           </Label>
           <div className="mt-2 flex items-center gap-3">
@@ -252,8 +295,13 @@ function OnlinePage() {
             />
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
-            Tap your token to choose a preset or upload a photo (auto-resized to ≤ 30 KB) for your board piece.
+            Tap your token to choose a preset or upload a photo (auto-resized to ≤ 30 KB) for your
+            board piece.
           </p>
+        </div>
+
+        <div className="mt-6">
+          <PlayerProfileStats userId={user.id} />
         </div>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -269,11 +317,22 @@ function OnlinePage() {
                   onClick={() => setLength(l.rounds)}
                   className={cn(
                     "rounded-lg border px-2 py-2 text-left transition",
-                    length === l.rounds ? "border-primary bg-primary/10" : "border-border bg-secondary hover:border-muted-foreground",
+                    length === l.rounds
+                      ? "border-primary bg-primary/10"
+                      : "border-border bg-secondary hover:border-muted-foreground",
                   )}
                 >
-                  <span className={cn("block text-sm font-semibold", length === l.rounds && "text-primary")}>{l.label}</span>
-                  <span className="block text-[11px] leading-tight text-muted-foreground">{l.hint}</span>
+                  <span
+                    className={cn(
+                      "block text-sm font-semibold",
+                      length === l.rounds && "text-primary",
+                    )}
+                  >
+                    {l.label}
+                  </span>
+                  <span className="block text-[11px] leading-tight text-muted-foreground">
+                    {l.hint}
+                  </span>
                 </button>
               ))}
             </div>
@@ -318,7 +377,12 @@ function OnlinePage() {
                 className="mt-4 w-full"
                 disabled={joinM.isPending || code.length !== CODE_LENGTH || !name.trim()}
               >
-                {joinM.isPending && joiningLobbyCode === null ? <Loader2 className="animate-spin" /> : <ArrowRight />} Join
+                {joinM.isPending && joiningLobbyCode === null ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <ArrowRight />
+                )}{" "}
+                Join
               </Button>
             </form>
           </section>
@@ -364,7 +428,8 @@ function OnlinePage() {
             </div>
           ) : lobbies.length === 0 ? (
             <div className="mt-3 rounded-xl border border-dashed border-border bg-card/50 px-4 py-5 text-center text-sm text-muted-foreground">
-              No open lobbies looking for players right now — create a room above and wait for others to join!
+              No open lobbies looking for players right now — create a room above and wait for
+              others to join!
             </div>
           ) : (
             <ul className="mt-3 space-y-2">
@@ -383,9 +448,12 @@ function OnlinePage() {
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono text-base font-bold tracking-widest text-primary">{lobby.code}</span>
+                        <span className="font-mono text-base font-bold tracking-widest text-primary">
+                          {lobby.code}
+                        </span>
                         <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold text-secondary-foreground">
-                          {playerCount}/{MAX_PLAYERS} · {spotsLeft} {spotsLeft === 1 ? "spot" : "spots"} left
+                          {playerCount}/{MAX_PLAYERS} · {spotsLeft}{" "}
+                          {spotsLeft === 1 ? "spot" : "spots"} left
                         </span>
                         <span className="text-xs text-muted-foreground">{roundText}</span>
                       </div>
@@ -419,7 +487,9 @@ function OnlinePage() {
 
         {roomsQuery.isError && !missingSchema && !isAuthFailure(roomsQuery.error) && (
           <div className="mt-6 flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm">
-            <span className="text-muted-foreground">Couldn't load your active rooms right now.</span>
+            <span className="text-muted-foreground">
+              Couldn't load your active rooms right now.
+            </span>
             <Button variant="secondary" size="sm" onClick={() => void roomsQuery.refetch()}>
               Try again
             </Button>
@@ -442,7 +512,9 @@ function OnlinePage() {
                     params={{ code: r.code ?? "" }}
                     className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 transition hover:border-primary"
                   >
-                    <span className="font-mono text-base tracking-widest text-primary">{r.code}</span>
+                    <span className="font-mono text-base tracking-widest text-primary">
+                      {r.code}
+                    </span>
                     <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
                       {(r.game_players ?? []).map((p) => p.display_name).join(", ")}
                     </span>
@@ -452,7 +524,9 @@ function OnlinePage() {
                     <span
                       className={cn(
                         "rounded-full px-2 py-0.5 text-xs font-semibold",
-                        r.status === "playing" ? "bg-accent text-accent-foreground" : "bg-secondary text-secondary-foreground",
+                        r.status === "playing"
+                          ? "bg-accent text-accent-foreground"
+                          : "bg-secondary text-secondary-foreground",
                       )}
                     >
                       {r.status === "playing" ? "Playing" : "In lobby"}

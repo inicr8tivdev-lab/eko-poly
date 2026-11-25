@@ -2,7 +2,14 @@ import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { JAIL_FINE, formatNaira, isOwnable, spaceAt } from "@/game/board";
-import { BID_STEP, actorOf, maxRaisable, playerAt, type Action, type GameState } from "@/game/engine";
+import {
+  BID_STEP,
+  actorOf,
+  maxRaisable,
+  playerAt,
+  type Action,
+  type GameState,
+} from "@/game/engine";
 import { cn } from "@/lib/utils";
 import { Die } from "./Dice";
 import { PlayerAvatar } from "./PlayerAvatar";
@@ -27,7 +34,8 @@ function Waiting({ state, pid, children }: { state: GameState; pid: number; chil
   const who = playerAt(state, pid);
   return (
     <p className="flex items-center justify-center gap-2 text-center text-sm opacity-90 @min-[620px]/game:text-[clamp(11px,1.8cqw,16px)]">
-      <Loader2 className="size-4 shrink-0 animate-spin" /> {who.name} {children ?? (who.isCpu ? "dey think…" : "dey play…")}
+      <Loader2 className="size-4 shrink-0 animate-spin" /> {who.name}{" "}
+      {children ?? (who.isCpu ? "dey think…" : "dey play…")}
     </p>
   );
 }
@@ -86,16 +94,22 @@ export function CenterPanel(props: Props) {
             key={state.logSeq}
             className={cn(
               "animate-card-in w-full rounded-xl border-2 border-board-line px-4 py-3 text-center shadow-pop",
-              state.lastCard.deck === "wahala" ? "bg-sunset text-primary-foreground" : "bg-primary text-primary-foreground",
+              state.lastCard.deck === "wahala"
+                ? "bg-sunset text-primary-foreground"
+                : "bg-primary text-primary-foreground",
             )}
           >
             <p className="font-display text-[clamp(9px,1.5cqw,13px)] font-bold uppercase tracking-widest">
               {state.lastCard.deck === "wahala" ? "⚠️ Wahala" : "🎉 Owambe"}
             </p>
-            <p className="mt-1 text-[clamp(10px,1.7cqw,15px)] font-medium leading-snug">{state.lastCard.text}</p>
+            <p className="mt-1 text-[clamp(10px,1.7cqw,15px)] font-medium leading-snug">
+              {state.lastCard.text}
+            </p>
           </div>
         ) : (
-          <p className="text-center text-[clamp(9px,1.5cqw,13px)] italic opacity-75">{state.log[0]?.text}</p>
+          <p className="text-center text-[clamp(9px,1.5cqw,13px)] italic opacity-75">
+            {state.log[0]?.text}
+          </p>
         )}
       </div>
     </div>
@@ -114,7 +128,13 @@ function Actions({ state, rolling, sending, onRoll, dispatch, onCounter, viewer 
       {state.phase === "gameover" ? null : state.phase === "auction" && state.auction ? (
         <AuctionPanel state={state} dispatch={dispatch} viewer={viewer} busy={txBusy} />
       ) : state.phase === "trade" && state.trade ? (
-        <TradePanel state={state} dispatch={dispatch} onCounter={onCounter} viewer={viewer} busy={txBusy} />
+        <TradePanel
+          state={state}
+          dispatch={dispatch}
+          onCounter={onCounter}
+          viewer={viewer}
+          busy={txBusy}
+        />
       ) : away ? (
         <Waiting state={state} pid={p.id} />
       ) : state.phase === "roll" ? (
@@ -136,7 +156,12 @@ function Actions({ state, rolling, sending, onRoll, dispatch, onCounter, viewer 
                 Pay {formatNaira(JAIL_FINE)}
               </Button>
               {p.jailCards > 0 && (
-                <Button variant="onCenter" size="sm" disabled={busy} onClick={() => dispatch({ type: "useJailCard" })}>
+                <Button
+                  variant="onCenter"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => dispatch({ type: "useJailCard" })}
+                >
                   Use card
                 </Button>
               )}
@@ -153,13 +178,25 @@ function Actions({ state, rolling, sending, onRoll, dispatch, onCounter, viewer 
             Buy <strong>{here.name}</strong> for <strong>{formatNaira(here.price)}</strong>?
           </p>
           <div className="flex flex-wrap justify-center gap-2">
-            <Button variant="danfo" disabled={busy || p.money < here.price} onClick={() => dispatch({ type: "buy" })}>
+            <Button
+              variant="danfo"
+              disabled={busy || p.money < here.price}
+              onClick={() => dispatch({ type: "buy" })}
+            >
               Buy am
             </Button>
-            <Button variant="onCenter" disabled={busy} onClick={() => dispatch({ type: "auction" })}>
+            <Button
+              variant="onCenter"
+              disabled={busy}
+              onClick={() => dispatch({ type: "auction" })}
+            >
               {p.money < here.price ? "Let everybody bid" : "Auction it"}
             </Button>
-            <Button variant="onCenter" disabled={busy} onClick={() => dispatch({ type: "decline" })}>
+            <Button
+              variant="onCenter"
+              disabled={busy}
+              onClick={() => dispatch({ type: "decline" })}
+            >
               Pass
             </Button>
           </div>
@@ -172,7 +209,8 @@ function Actions({ state, rolling, sending, onRoll, dispatch, onCounter, viewer 
       ) : state.phase === "debt" ? (
         <>
           <p className="text-center text-sm @min-[620px]/game:text-[clamp(10px,1.7cqw,15px)]">
-            You owe <strong>{formatNaira(-p.money)}</strong>. Sell buildings or mortgage property to pay.
+            You owe <strong>{formatNaira(-p.money)}</strong>. Sell buildings or mortgage property to
+            pay.
           </p>
           <Button
             variant={maxRaisable(state, p.id) < 0 ? "destructive" : "onCenter"}
@@ -184,7 +222,12 @@ function Actions({ state, rolling, sending, onRoll, dispatch, onCounter, viewer 
           </Button>
         </>
       ) : (
-        <Button variant="go" size="xl" disabled={busy} onClick={() => dispatch({ type: "endTurn" })}>
+        <Button
+          variant="go"
+          size="xl"
+          disabled={busy}
+          onClick={() => dispatch({ type: "endTurn" })}
+        >
           End turn
         </Button>
       )}
@@ -210,7 +253,8 @@ export function ActionBar(props: Props) {
         {isMyTurn && (
           <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-primary">
             <PlayerAvatar player={actor} seatIndex={actor.id} className="size-5 text-xs" />
-            {props.viewer !== undefined ? "Your turn" : `${actor.name}'s turn`} · {formatNaira(actor.money)}
+            {props.viewer !== undefined ? "Your turn" : `${actor.name}'s turn`} ·{" "}
+            {formatNaira(actor.money)}
           </p>
         )}
         <Actions {...props} />
@@ -247,7 +291,8 @@ function AuctionPanel({
         {leader ? (
           <span className="inline-flex flex-wrap items-center justify-center gap-1.5">
             Top bid <strong>{formatNaira(a.bid)}</strong> by{" "}
-            <PlayerAvatar player={leader} seatIndex={leader.id} className="size-5 text-xs" /> {leader.name}
+            <PlayerAvatar player={leader} seatIndex={leader.id} className="size-5 text-xs" />{" "}
+            {leader.name}
           </span>
         ) : (
           "No bids yet"
@@ -275,7 +320,12 @@ function AuctionPanel({
                 Bid {formatNaira(amount)}
               </Button>
             ))}
-            <Button variant="onCenter" size="sm" disabled={busy} onClick={() => dispatch({ type: "auctionPass" })}>
+            <Button
+              variant="onCenter"
+              size="sm"
+              disabled={busy}
+              onClick={() => dispatch({ type: "auctionPass" })}
+            >
               Drop out
             </Button>
           </div>
@@ -303,7 +353,8 @@ function TradePanel({
   const from = playerAt(state, t.from);
   const to = playerAt(state, t.to);
   const side = (props: number[], cash: number) =>
-    [...props.map((i) => spaceAt(i).name), ...(cash > 0 ? [formatNaira(cash)] : [])].join(" + ") || "nothing";
+    [...props.map((i) => spaceAt(i).name), ...(cash > 0 ? [formatNaira(cash)] : [])].join(" + ") ||
+    "nothing";
 
   return (
     <div className="flex w-full flex-col items-center gap-2 rounded-xl bg-board-line/40 px-3 py-2 text-center">
@@ -319,18 +370,32 @@ function TradePanel({
         Wants <strong>{side(t.get, t.getCash)}</strong>
       </p>
       {elsewhere(state, to.id, viewer) ? (
-        <Waiting state={state} pid={to.id}>dey consider am…</Waiting>
+        <Waiting state={state} pid={to.id}>
+          dey consider am…
+        </Waiting>
       ) : (
         <>
-          <p className="text-xs opacity-80 @min-[620px]/game:text-[clamp(9px,1.4cqw,12px)]">{to.name}, your call.</p>
+          <p className="text-xs opacity-80 @min-[620px]/game:text-[clamp(9px,1.4cqw,12px)]">
+            {to.name}, your call.
+          </p>
           <div className="flex flex-wrap justify-center gap-2">
-            <Button variant="go" size="sm" disabled={busy} onClick={() => dispatch({ type: "acceptTrade" })}>
+            <Button
+              variant="go"
+              size="sm"
+              disabled={busy}
+              onClick={() => dispatch({ type: "acceptTrade" })}
+            >
               Accept
             </Button>
             <Button variant="onCenter" size="sm" disabled={busy} onClick={onCounter}>
               Counter
             </Button>
-            <Button variant="onCenter" size="sm" disabled={busy} onClick={() => dispatch({ type: "rejectTrade" })}>
+            <Button
+              variant="onCenter"
+              size="sm"
+              disabled={busy}
+              onClick={() => dispatch({ type: "rejectTrade" })}
+            >
               Reject
             </Button>
           </div>

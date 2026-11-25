@@ -18,9 +18,24 @@ import { loadSavedAvatar, saveLocalAvatar } from "@/lib/avatar";
 import { appendChatMessage, cleanChatText, mergeChatMessages, type ChatMessage } from "@/lib/chat";
 import { fallbackPlayerName, type AuthUserLike } from "@/lib/profile";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
-import { isAuthFailure, isMissingSchemaError, myAvatarQuery, myNameQuery, roomQuery, type Room } from "@/lib/room-queries";
+import {
+  isAuthFailure,
+  isMissingSchemaError,
+  myAvatarQuery,
+  myNameQuery,
+  roomQuery,
+  type Room,
+} from "@/lib/room-queries";
 import { MAX_PLAYERS, MIN_PLAYERS, normalizeCode } from "@/lib/rooms";
-import { endRoom, joinRoom, leaveRoom, sendChatMessage, sendMove, startRoom, updateMyAvatar } from "@/lib/rooms.functions";
+import {
+  endRoom,
+  joinRoom,
+  leaveRoom,
+  sendChatMessage,
+  sendMove,
+  startRoom,
+  updateMyAvatar,
+} from "@/lib/rooms.functions";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/room/$code")({
@@ -31,9 +46,16 @@ export const Route = createFileRoute("/_authenticated/room/$code")({
   head: ({ params }) => ({
     meta: [
       { title: `Room ${params.code} — Ekopoly online` },
-      { name: "description", content: "Join your friends' private Ekopoly room and play the Lagos property game live." },
+      {
+        name: "description",
+        content: "Join your friends' private Ekopoly room and play the Lagos property game live.",
+      },
       { property: "og:title", content: "Join my Ekopoly game" },
-      { property: "og:description", content: "Tap to join my private Ekopoly room — buy Lekki, dodge LASTMA, become the Big Man of Eko." },
+      {
+        property: "og:description",
+        content:
+          "Tap to join my private Ekopoly room — buy Lekki, dodge LASTMA, become the Big Man of Eko.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "robots", content: "noindex" },
@@ -55,8 +77,16 @@ function useLiveRoom(room: Room | null, code: string) {
     const refresh = () => void queryClient.invalidateQueries({ queryKey: ["room", code] });
     const channel = supabase
       .channel(`room-${id}-${Math.random().toString(36).slice(2)}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "games", filter: `id=eq.${id}` }, refresh)
-      .on("postgres_changes", { event: "*", schema: "public", table: "game_players", filter: `game_id=eq.${id}` }, refresh)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "games", filter: `id=eq.${id}` },
+        refresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "game_players", filter: `game_id=eq.${id}` },
+        refresh,
+      )
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
@@ -64,7 +94,11 @@ function useLiveRoom(room: Room | null, code: string) {
   }, [id, code, queryClient]);
 }
 
-function useRoomChat(room: Room | null, mySeat: number | undefined, myName: string | undefined): OnlineChatConfig {
+function useRoomChat(
+  room: Room | null,
+  mySeat: number | undefined,
+  myName: string | undefined,
+): OnlineChatConfig {
   const queryClient = useQueryClient();
   const sendChat = useServerFn(sendChatMessage);
   const [liveMessages, setLiveMessages] = useState<ChatMessage[]>([]);
@@ -136,7 +170,9 @@ function useRoomChat(room: Room | null, mySeat: number | undefined, myName: stri
         }
         setLiveMessages((prev) => prev.map((m) => (m.id === clientId ? res.message : m)));
         if (channelRef.current) {
-          void channelRef.current.send({ type: "broadcast", event: "chat:message", payload: res.message }).catch(() => {});
+          void channelRef.current
+            .send({ type: "broadcast", event: "chat:message", payload: res.message })
+            .catch(() => {});
         }
         void queryClient.invalidateQueries({ queryKey: ["room", roomCode] });
       } catch {
@@ -149,7 +185,10 @@ function useRoomChat(room: Room | null, mySeat: number | undefined, myName: stri
     [roomId, roomCode, mySeat, myName, sendChat, queryClient],
   );
 
-  const messages = useMemo(() => mergeChatMessages(serverChat ?? [], liveMessages), [serverChat, liveMessages]);
+  const messages = useMemo(
+    () => mergeChatMessages(serverChat ?? [], liveMessages),
+    [serverChat, liveMessages],
+  );
 
   return useMemo(
     () => ({ messages, onSend, sending: pendingCount > 0 }),
@@ -178,7 +217,8 @@ function RoomPage() {
         return;
       }
       await supabase.auth.signOut().catch(() => {});
-      if (active) void navigate({ to: "/auth", search: { redirect: `/room/${code}` }, replace: true });
+      if (active)
+        void navigate({ to: "/auth", search: { redirect: `/room/${code}` }, replace: true });
     });
     return () => {
       active = false;
@@ -225,7 +265,8 @@ function RoomPage() {
   }
 
   if (!room || !me) return <JoinRoom code={code} user={user} />;
-  if (room.status === "lobby" || !room.state) return <Lobby room={room} userId={user.id} viewerSeat={me.seat} chat={chat} />;
+  if (room.status === "lobby" || !room.state)
+    return <Lobby room={room} userId={user.id} viewerSeat={me.seat} chat={chat} />;
   return <OnlineGame room={room} seat={me.seat} isHost={room.host_id === user.id} chat={chat} />;
 }
 
@@ -258,7 +299,9 @@ function JoinRoom({ code, user }: { code: string; user: AuthUserLike }) {
     <div className="min-h-screen">
       <OnlineHeader />
       <main className="mx-auto max-w-sm px-4 py-12">
-        <p className="text-sm uppercase tracking-[0.3em] text-muted-foreground">You've been invited</p>
+        <p className="text-sm uppercase tracking-[0.3em] text-muted-foreground">
+          You've been invited
+        </p>
         <h1 className="mt-2 font-display text-3xl font-black">
           Room <span className="font-mono tracking-widest text-primary">{code}</span>
         </h1>
@@ -290,7 +333,13 @@ function JoinRoom({ code, user }: { code: string; user: AuthUserLike }) {
               className="h-11 bg-background"
             />
           </div>
-          <Button type="submit" variant="danfo" size="lg" className="mt-4 w-full" disabled={m.isPending || !name.trim()}>
+          <Button
+            type="submit"
+            variant="danfo"
+            size="lg"
+            className="mt-4 w-full"
+            disabled={m.isPending || !name.trim()}
+          >
             {m.isPending && <Loader2 className="animate-spin" />} Join room
           </Button>
         </form>
@@ -362,7 +411,11 @@ function Lobby({
   };
   const share = async () => {
     try {
-      await navigator.share({ title: "Ekopoly", text: `Join my Ekopoly game! Room code ${room.code}`, url: link });
+      await navigator.share({
+        title: "Ekopoly",
+        text: `Join my Ekopoly game! Room code ${room.code}`,
+        url: link,
+      });
     } catch {
       /* closed the share sheet */
     }
@@ -385,7 +438,9 @@ function Lobby({
           <div className="h-2 bg-danfo" />
           <div className="p-5 text-center">
             <p className="text-sm text-muted-foreground">Room code</p>
-            <p className="mt-1 font-mono text-4xl font-bold tracking-[0.35em] text-primary sm:text-5xl">{room.code}</p>
+            <p className="mt-1 font-mono text-4xl font-bold tracking-[0.35em] text-primary sm:text-5xl">
+              {room.code}
+            </p>
             <div className="mt-4 flex flex-wrap justify-center gap-2">
               <Button variant="secondary" size="sm" onClick={copy}>
                 {copied ? <Check /> : <Copy />} {copied ? "Copied" : "Copy invite link"}
@@ -397,7 +452,9 @@ function Lobby({
               )}
             </div>
             <p className="mt-3 text-xs text-muted-foreground">
-              {room.max_rounds ? `${room.max_rounds} rounds — richest player wins at time up` : "Endless — last one standing wins"}
+              {room.max_rounds
+                ? `${room.max_rounds} rounds — richest player wins at time up`
+                : "Endless — last one standing wins"}
             </p>
           </div>
         </div>
@@ -431,7 +488,12 @@ function Lobby({
                   }}
                 />
               ) : p ? (
-                <AvatarCircle seatIndex={i} avatar={p.avatar} name={p.display_name} className="size-10 text-xl" />
+                <AvatarCircle
+                  seatIndex={i}
+                  avatar={p.avatar}
+                  name={p.display_name}
+                  className="size-10 text-xl"
+                />
               ) : (
                 <span className="flex size-10 items-center justify-center rounded-full bg-secondary text-xl opacity-50">
                   {tokenOf(i).emoji}
@@ -440,9 +502,13 @@ function Lobby({
               {p ? (
                 <span className="flex flex-1 items-center gap-2 font-semibold">
                   {p.display_name}
-                  {p.user_id === room.host_id && <Crown className="size-4 text-primary" aria-label="Host" />}
+                  {p.user_id === room.host_id && (
+                    <Crown className="size-4 text-primary" aria-label="Host" />
+                  )}
                   {p.user_id === userId && (
-                    <span className="rounded bg-primary/15 px-1.5 text-[10px] uppercase tracking-wider text-primary">You</span>
+                    <span className="rounded bg-primary/15 px-1.5 text-[10px] uppercase tracking-wider text-primary">
+                      You
+                    </span>
                   )}
                 </span>
               ) : (
@@ -546,5 +612,13 @@ function OnlineGame({
   const back = () => navigate({ to: "/online" });
   if (!room.state) return null;
 
-  return <GameScreen game={room.state} setGame={() => {}} online={online} onQuit={back} onNewGame={back} />;
+  return (
+    <GameScreen
+      game={room.state}
+      setGame={() => {}}
+      online={online}
+      onQuit={back}
+      onNewGame={back}
+    />
+  );
 }

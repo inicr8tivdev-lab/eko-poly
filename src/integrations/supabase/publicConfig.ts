@@ -22,12 +22,16 @@ function projectIdFromUrl(url: string): string | undefined {
 }
 
 export function getPublicSupabaseConfig(): PublicSupabaseConfig {
-  const viteEnv = typeof import.meta !== "undefined" && import.meta.env ? import.meta.env : undefined;
+  const viteEnv =
+    typeof import.meta !== "undefined" && import.meta.env ? import.meta.env : undefined;
   const procEnv = typeof process !== "undefined" ? process.env : undefined;
 
-  const viteProjectId = viteEnv?.["VITE_SUPABASE_PROJECT_ID"]?.trim() || procEnv?.["VITE_SUPABASE_PROJECT_ID"]?.trim();
+  const viteProjectId =
+    viteEnv?.["VITE_SUPABASE_PROJECT_ID"]?.trim() || procEnv?.["VITE_SUPABASE_PROJECT_ID"]?.trim();
   const viteUrl = viteEnv?.["VITE_SUPABASE_URL"]?.trim() || procEnv?.["VITE_SUPABASE_URL"]?.trim();
-  const viteKey = viteEnv?.["VITE_SUPABASE_PUBLISHABLE_KEY"]?.trim() || procEnv?.["VITE_SUPABASE_PUBLISHABLE_KEY"]?.trim();
+  const viteKey =
+    viteEnv?.["VITE_SUPABASE_PUBLISHABLE_KEY"]?.trim() ||
+    procEnv?.["VITE_SUPABASE_PUBLISHABLE_KEY"]?.trim();
 
   // Only override the default project when VITE_* variables are explicitly configured
   // so the browser client and server functions never talk to different Supabase projects.

@@ -94,7 +94,13 @@ function tone(
   osc.stop(now + duration + 0.02);
 }
 
-function noiseTap(ctx: AudioContext, startOffset: number, duration: number, freq: number, gain = 0.12): void {
+function noiseTap(
+  ctx: AudioContext,
+  startOffset: number,
+  duration: number,
+  freq: number,
+  gain = 0.12,
+): void {
   const sampleRate = ctx.sampleRate;
   const length = Math.max(1, Math.floor(sampleRate * duration));
   const buffer = ctx.createBuffer(1, length, sampleRate);
@@ -166,25 +172,74 @@ export function playSound(effect: SoundEffect): void {
       noiseTap(ctx, 0.09, 0.04, 920, 0.14);
       tone(ctx, 390, 0.09, 0.09, { type: "triangle", gain: 0.15, endFreq: 220 });
       return;
-    case "tax":
+    case "tax": {
+      try {
+        if (typeof window !== "undefined" && typeof Audio !== "undefined") {
+          const audio = new Audio("/assets/aistudio/Eweeh-sound-effects_08a981e6.mp3");
+          audio.volume = 0.8;
+          void audio.play().catch(() => {});
+        }
+      } catch {
+        // ignore audio errors
+      }
       tone(ctx, 392, 0, 0.12, { type: "triangle", gain: 0.13, endFreq: 330 });
       tone(ctx, 293.66, 0.11, 0.18, { type: "triangle", gain: 0.14, endFreq: 220 });
       return;
-    case "owambe":
+    }
+    case "owambe": {
+      try {
+        if (typeof window !== "undefined" && typeof Audio !== "undefined") {
+          const audio = new Audio(
+            "/assets/aistudio/Lets-have-it-Comedy-sound-effect_f089d645.mp3",
+          );
+          audio.volume = 0.85;
+          void audio.play().catch(() => {});
+        }
+      } catch {
+        // ignore audio errors
+      }
       tone(ctx, 587.33, 0, 0.1, { type: "triangle", gain: 0.14 });
       tone(ctx, 739.99, 0.07, 0.1, { type: "triangle", gain: 0.14 });
       tone(ctx, 880, 0.14, 0.1, { type: "triangle", gain: 0.15 });
       tone(ctx, 1174.66, 0.21, 0.25, { type: "sine", gain: 0.17 });
       return;
-    case "wahala":
+    }
+    case "wahala": {
+      try {
+        if (typeof window !== "undefined" && typeof Audio !== "undefined") {
+          const audio = new Audio(
+            "/assets/aistudio/Wahala-wahala-wahala-Sound-effect_9200d5a4.mp3",
+          );
+          audio.volume = 0.85;
+          void audio.play().catch(() => {});
+        }
+      } catch {
+        // ignore audio errors
+      }
       tone(ctx, 349.23, 0, 0.13, { type: "sawtooth", gain: 0.08, endFreq: 329.63 });
       tone(ctx, 311.13, 0.12, 0.22, { type: "sawtooth", gain: 0.08, endFreq: 246.94 });
       return;
-    case "jail":
+    }
+    case "jail": {
+      const tracks = [
+        "/assets/aistudio/Eweeh-sound-effects_08a981e6.mp3",
+        "/assets/aistudio/sorry_7f7f44d5.mp3",
+      ];
+      const track = tracks[Math.floor(Math.random() * tracks.length)];
+      try {
+        if (typeof window !== "undefined" && typeof Audio !== "undefined") {
+          const audio = new Audio(track);
+          audio.volume = 0.8;
+          void audio.play().catch(() => {});
+        }
+      } catch {
+        // ignore audio errors
+      }
       tone(ctx, 280, 0, 0.25, { type: "square", gain: 0.08 });
       tone(ctx, 415, 0, 0.25, { type: "triangle", gain: 0.14 });
       noiseTap(ctx, 0, 0.06, 1500, 0.15);
       return;
+    }
     case "bid":
       tone(ctx, 740, 0, 0.06, { type: "sine", gain: 0.14 });
       return;
@@ -247,7 +302,8 @@ export function detectGameSounds(
   options?: { includeRemoteRoll?: boolean },
 ): SoundEffect[] {
   const newCount = next.logSeq - prev.logSeq;
-  const entries = newCount > 0 ? next.log.slice(0, Math.min(newCount, next.log.length)).reverse() : [];
+  const entries =
+    newCount > 0 ? next.log.slice(0, Math.min(newCount, next.log.length)).reverse() : [];
   const sounds: SoundEffect[] = [];
   const push = (s: SoundEffect) => {
     if (sounds[sounds.length - 1] !== s) sounds.push(s);
@@ -293,7 +349,11 @@ export function detectGameSounds(
       push("build");
       continue;
     }
-    if (t.includes("sold a building") || t.includes("mortgaged ") || t.includes("settled their debt")) {
+    if (
+      t.includes("sold a building") ||
+      t.includes("mortgaged ") ||
+      t.includes("settled their debt")
+    ) {
       push("cash");
       continue;
     }

@@ -34,7 +34,10 @@ export function isValidAvatar(avatar?: string | null): boolean {
   return (PRESET_AVATARS as readonly string[]).includes(avatar);
 }
 
-export function computeSquareCrop(width: number, height: number): { sx: number; sy: number; size: number } {
+export function computeSquareCrop(
+  width: number,
+  height: number,
+): { sx: number; sy: number; size: number } {
   const w = Math.max(1, Math.floor(width));
   const h = Math.max(1, Math.floor(height));
   const size = Math.min(w, h);
@@ -80,7 +83,15 @@ export function encodeResizedAvatar(
 async function loadImageSource(file: File): Promise<{
   width: number;
   height: number;
-  draw: (ctx: CanvasRenderingContext2D, sx: number, sy: number, sw: number, sh: number, dw: number, dh: number) => void;
+  draw: (
+    ctx: CanvasRenderingContext2D,
+    sx: number,
+    sy: number,
+    sw: number,
+    sh: number,
+    dw: number,
+    dh: number,
+  ) => void;
   cleanup: () => void;
 }> {
   if (typeof createImageBitmap === "function") {
@@ -117,7 +128,10 @@ async function loadImageSource(file: File): Promise<{
   }
 }
 
-export async function resizeImageToAvatar(file: File, maxBytes: number = MAX_AVATAR_BYTES): Promise<string> {
+export async function resizeImageToAvatar(
+  file: File,
+  maxBytes: number = MAX_AVATAR_BYTES,
+): Promise<string> {
   if (file.type && !file.type.startsWith("image/")) {
     throw new Error("Please select an image file (PNG, JPG, WebP, or GIF).");
   }

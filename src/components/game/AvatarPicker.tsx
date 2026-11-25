@@ -1,7 +1,13 @@
 import { useRef, useState } from "react";
 import { Camera, Loader2, RotateCcw, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { tokenOf } from "@/game/engine";
 import {
   PRESET_AVATARS,
@@ -68,7 +74,10 @@ export function AvatarPicker({
           seatIndex={seatIndex}
           avatar={avatar}
           name={name}
-          className={cn(sizeClassName, "ring-2 ring-transparent transition group-hover:ring-primary")}
+          className={cn(
+            sizeClassName,
+            "ring-2 ring-transparent transition group-hover:ring-primary",
+          )}
         />
         <span className="absolute -right-1 -bottom-1 flex size-4 items-center justify-center rounded-full border border-border bg-background text-foreground shadow-sm">
           <Camera className="size-2.5" />
@@ -80,8 +89,8 @@ export function AvatarPicker({
           <DialogHeader>
             <DialogTitle className="font-display">Choose game piece avatar</DialogTitle>
             <DialogDescription>
-              Pick a preset icon or upload a photo for {name || `Player ${seatIndex + 1}`}. Photos automatically resize
-              to under 30 KB and appear on your board piece.
+              Pick a preset icon or upload a photo for {name || `Player ${seatIndex + 1}`}. Photos
+              automatically resize to under 30 KB and appear on your board piece.
             </DialogDescription>
           </DialogHeader>
 
@@ -140,7 +149,9 @@ export function AvatarPicker({
           </div>
 
           <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Presets</p>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Presets
+            </p>
             <div className="grid grid-cols-6 gap-2">
               <button
                 type="button"

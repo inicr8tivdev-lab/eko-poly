@@ -11,7 +11,8 @@ export const Route = createFileRoute("/_authenticated")({
 
       const status = error && "status" in error ? Number(error.status) : 0;
       const msg = error?.message?.toLowerCase() ?? "";
-      const isHardAuthError = status === 401 || status === 403 || msg.includes("jwt") || msg.includes("invalid");
+      const isHardAuthError =
+        status === 401 || status === 403 || msg.includes("jwt") || msg.includes("invalid");
 
       if (sessionData.session?.user && !isHardAuthError) {
         return { user: sessionData.session.user };

@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { createGame, endGameEarly, holdingAt, playerAt, reduce, rentFor, type GameState } from "./engine";
+import {
+  createGame,
+  endGameEarly,
+  holdingAt,
+  playerAt,
+  reduce,
+  rentFor,
+  type GameState,
+} from "./engine";
 
 function newGame(): GameState {
   return createGame(
@@ -132,7 +140,6 @@ describe("Bidding when you can't afford a property", () => {
     const a = reduce(s, { type: "auction" });
     expect(a.phase).toBe("auction");
     expect(a.auction?.turn).toBe(0);
-
   });
 
   it("also lets a player who can afford the property put it up for bidding", () => {
@@ -172,7 +179,14 @@ describe("Bidding when you can't afford a property", () => {
 
 describe("host ends game early", () => {
   it("ends the game and the richest player wins", () => {
-    const g = createGame([{ name: "A", isCpu: false }, { name: "B", isCpu: false }], () => 0.5, null);
+    const g = createGame(
+      [
+        { name: "A", isCpu: false },
+        { name: "B", isCpu: false },
+      ],
+      () => 0.5,
+      null,
+    );
     g.players[1]!.money += 500;
     const e = endGameEarly(g);
     expect(e.phase).toBe("gameover");

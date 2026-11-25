@@ -12,8 +12,15 @@ describe("room query error classification", () => {
   });
 
   it("identifies missing table / schema cache errors", () => {
-    expect(isMissingSchemaError({ code: "PGRST205", message: "Could not find the table 'public.games' in the schema cache" })).toBe(true);
-    expect(isMissingSchemaError({ code: "42P01", message: 'relation "public.games" does not exist' })).toBe(true);
+    expect(
+      isMissingSchemaError({
+        code: "PGRST205",
+        message: "Could not find the table 'public.games' in the schema cache",
+      }),
+    ).toBe(true);
+    expect(
+      isMissingSchemaError({ code: "42P01", message: 'relation "public.games" does not exist' }),
+    ).toBe(true);
     expect(isMissingSchemaError({ code: "PGRST301" })).toBe(false);
     expect(isMissingSchemaError(undefined)).toBe(false);
   });

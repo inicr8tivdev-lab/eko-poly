@@ -44,9 +44,15 @@ export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
       { title: "Sign in — Ekopoly online" },
-      { name: "description", content: "Sign in to create a private Ekopoly room or join your friends' game." },
+      {
+        name: "description",
+        content: "Sign in to create a private Ekopoly room or join your friends' game.",
+      },
       { property: "og:title", content: "Sign in — Ekopoly online" },
-      { property: "og:description", content: "Play Ekopoly, the Lagos property game, with friends on their own phones." },
+      {
+        property: "og:description",
+        content: "Play Ekopoly, the Lagos property game, with friends on their own phones.",
+      },
       { property: "og:url", content: "https://eko-poly.vercel.app/auth" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
@@ -63,7 +69,9 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [authError, setAuthError] = useState<{ message: string; wrongCreds?: boolean } | null>(null);
+  const [authError, setAuthError] = useState<{ message: string; wrongCreds?: boolean } | null>(
+    null,
+  );
   const [busy, setBusy] = useState(false);
   const [checkEmail, setCheckEmail] = useState<"confirm" | "reset" | null>(null);
   const [hasOAuthButtons, setHasOAuthButtons] = useState(false);
@@ -106,7 +114,12 @@ function AuthPage() {
         setCheckEmail(null);
         return;
       }
-      if (event === "SIGNED_IN" && session && !isRecoveryRef.current && !window.location.hash.includes("type=recovery")) {
+      if (
+        event === "SIGNED_IN" &&
+        session &&
+        !isRecoveryRef.current &&
+        !window.location.hash.includes("type=recovery")
+      ) {
         void ensureUserProfile(session.user).finally(() => {
           if (active && !isRecoveryRef.current) finish();
         });
@@ -165,7 +178,10 @@ function AuthPage() {
       }
 
       if (mode === "signin") {
-        const { data, error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password,
+        });
         if (error) {
           const lower = error.message.toLowerCase();
           if (lower.includes("invalid login credentials")) {
@@ -236,7 +252,11 @@ function AuthPage() {
         </Link>
         <div className="mt-6 rounded-2xl border border-border bg-card p-6 shadow-pop">
           {(mode === "signin" || mode === "signup") && (
-            <div className="grid grid-cols-2 gap-1 rounded-xl bg-secondary p-1" role="tablist" aria-label="Authentication mode">
+            <div
+              className="grid grid-cols-2 gap-1 rounded-xl bg-secondary p-1"
+              role="tablist"
+              aria-label="Authentication mode"
+            >
               <button
                 type="button"
                 role="tab"
@@ -244,7 +264,9 @@ function AuthPage() {
                 onClick={() => switchMode("signin")}
                 className={cn(
                   "rounded-lg px-3 py-2 text-sm font-semibold transition",
-                  mode === "signin" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                  mode === "signin"
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 Sign in
@@ -256,7 +278,9 @@ function AuthPage() {
                 onClick={() => switchMode("signup")}
                 className={cn(
                   "rounded-lg px-3 py-2 text-sm font-semibold transition",
-                  mode === "signup" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                  mode === "signup"
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 Create account
@@ -264,7 +288,12 @@ function AuthPage() {
             </div>
           )}
 
-          <h1 className={cn("font-display text-xl font-black", (mode === "signin" || mode === "signup") && "mt-5")}>
+          <h1
+            className={cn(
+              "font-display text-xl font-black",
+              (mode === "signin" || mode === "signup") && "mt-5",
+            )}
+          >
             {mode === "signin"
               ? "Sign in to play online"
               : mode === "signup"
@@ -286,11 +315,13 @@ function AuthPage() {
               <p>
                 {checkEmail === "reset" ? (
                   <>
-                    Check <strong>{email.trim()}</strong> for your password reset link. Open it on this device to set a new password.
+                    Check <strong>{email.trim()}</strong> for your password reset link. Open it on
+                    this device to set a new password.
                   </>
                 ) : (
                   <>
-                    Check <strong>{email.trim()}</strong> for a confirmation link. Open it on this device and you'll come straight back here.
+                    Check <strong>{email.trim()}</strong> for a confirmation link. Open it on this
+                    device and you'll come straight back here.
                   </>
                 )}
               </p>
@@ -311,14 +342,19 @@ function AuthPage() {
                   </div>
                   {hasOAuthButtons && (
                     <div className="my-5 flex items-center gap-3 text-xs uppercase tracking-widest text-muted-foreground">
-                      <span className="h-px flex-1 bg-border" /> or <span className="h-px flex-1 bg-border" />
+                      <span className="h-px flex-1 bg-border" /> or{" "}
+                      <span className="h-px flex-1 bg-border" />
                     </div>
                   )}
                 </>
               )}
               <form
                 onSubmit={submit}
-                className={hasOAuthButtons && (mode === "signin" || mode === "signup") ? "grid gap-3" : "mt-5 grid gap-3"}
+                className={
+                  hasOAuthButtons && (mode === "signin" || mode === "signup")
+                    ? "grid gap-3"
+                    : "mt-5 grid gap-3"
+                }
               >
                 {mode === "signup" && (
                   <div className="grid gap-1.5">
@@ -356,7 +392,9 @@ function AuthPage() {
                 {mode !== "forgot" && (
                   <div className="grid gap-1.5">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="password">{mode === "recovery" ? "New password" : "Password"}</Label>
+                      <Label htmlFor="password">
+                        {mode === "recovery" ? "New password" : "Password"}
+                      </Label>
                       {mode === "signin" && (
                         <button
                           type="button"
@@ -393,7 +431,10 @@ function AuthPage() {
                   </div>
                 )}
                 {authError && (
-                  <div className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-xs text-destructive" role="alert">
+                  <div
+                    className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-xs text-destructive"
+                    role="alert"
+                  >
                     <p>{authError.message}</p>
                     {authError.wrongCreds && (
                       <div className="mt-2 flex flex-wrap gap-3">

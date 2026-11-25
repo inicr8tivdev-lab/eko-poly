@@ -41,7 +41,9 @@ describe("lib/supabase configuration", () => {
     process.env["SUPABASE_URL"] = "https://otherproject.supabase.co";
     process.env["SUPABASE_PUBLISHABLE_KEY"] = "sb_publishable_other";
     const fakeHeader = Buffer.from(JSON.stringify({ alg: "HS256" })).toString("base64url");
-    const fakePayload = Buffer.from(JSON.stringify({ ref: "otherproject", role: "service_role" })).toString("base64url");
+    const fakePayload = Buffer.from(
+      JSON.stringify({ ref: "otherproject", role: "service_role" }),
+    ).toString("base64url");
     process.env["SUPABASE_SERVICE_ROLE_KEY"] = `${fakeHeader}.${fakePayload}.sig`;
 
     const cfg = getPublicSupabaseConfig();

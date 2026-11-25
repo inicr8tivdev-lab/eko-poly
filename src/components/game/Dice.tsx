@@ -21,7 +21,10 @@ export function Die({ value, rolling }: { value: number; rolling?: boolean }) {
       {Array.from({ length: 9 }).map((_, i) => (
         <span
           key={i}
-          className={cn("rounded-full", PIPS[value]?.includes(i) ? "bg-board-line" : "bg-transparent")}
+          className={cn(
+            "rounded-full",
+            PIPS[value]?.includes(i) ? "bg-board-line" : "bg-transparent",
+          )}
         />
       ))}
     </div>

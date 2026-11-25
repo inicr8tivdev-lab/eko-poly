@@ -130,11 +130,17 @@ describe("GameScreen mobile & online play controls", () => {
     expect(toggle).toHaveAttribute("aria-pressed", "true");
 
     fireEvent.click(toggle);
-    expect(screen.getByRole("button", { name: "Unmute sound effects" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "Unmute sound effects" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
     expect(window.localStorage.getItem("ekopoly-sound-v1")).toBe("false");
 
     fireEvent.click(screen.getByRole("button", { name: "Unmute sound effects" }));
-    expect(screen.getByRole("button", { name: "Mute sound effects" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Mute sound effects" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     expect(window.localStorage.getItem("ekopoly-sound-v1")).toBe("true");
   });
 
@@ -148,11 +154,17 @@ describe("GameScreen mobile & online play controls", () => {
     expect(toggle).toHaveAttribute("aria-pressed", "true");
 
     fireEvent.click(toggle);
-    expect(screen.getByRole("button", { name: "Turn music on" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "Turn music on" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
     expect(window.localStorage.getItem("ekopoly-music-v1")).toBe("false");
 
     fireEvent.click(screen.getByRole("button", { name: "Turn music on" }));
-    expect(screen.getByRole("button", { name: "Turn music off" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Turn music off" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     expect(window.localStorage.getItem("ekopoly-music-v1")).toBe("true");
   });
 
@@ -160,7 +172,13 @@ describe("GameScreen mobile & online play controls", () => {
     const onSend = vi.fn();
     const game = makeOnlineGame();
     const initialMessages = [
-      { id: "m1", seat: 1, sender: "Tunde", text: "Who get Lekki?", sentAt: "2026-11-24T07:00:00.000Z" },
+      {
+        id: "m1",
+        seat: 1,
+        sender: "Tunde",
+        text: "Who get Lekki?",
+        sentAt: "2026-11-24T07:00:00.000Z",
+      },
     ];
 
     const { rerender } = render(
@@ -202,7 +220,13 @@ describe("GameScreen mobile & online play controls", () => {
           chat: {
             messages: [
               ...initialMessages,
-              { id: "m2", seat: 1, sender: "Tunde", text: "Pay rent!", sentAt: "2026-11-24T07:01:00.000Z" },
+              {
+                id: "m2",
+                seat: 1,
+                sender: "Tunde",
+                text: "Pay rent!",
+                sentAt: "2026-11-24T07:01:00.000Z",
+              },
             ],
             onSend,
           },

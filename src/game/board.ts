@@ -1,14 +1,7 @@
 // Ekopoly board: 40 spaces in classic Monopoly order, money is in thousands of naira (k).
 
 export type ColorGroup =
-  | "brown"
-  | "lightblue"
-  | "pink"
-  | "orange"
-  | "red"
-  | "yellow"
-  | "green"
-  | "darkblue";
+  "brown" | "lightblue" | "pink" | "orange" | "red" | "yellow" | "green" | "darkblue";
 
 export type Space =
   | { kind: "go"; name: string; sub: string }
@@ -49,7 +42,13 @@ export const BOARD: Space[] = [
   { kind: "card", deck: "owambe", name: "Owambe" },
   p("Ajegunle", "brown", 60, [4, 20, 60, 180, 320, 450], 50, "AJ City — home of the stars."),
   { kind: "tax", name: "LIRS Tax", amount: 200, sub: "Pay ₦200k" },
-  { kind: "transport", name: "Oshodi Danfo Park", price: 200, icon: "🚌", blurb: "Owa! Owa! Enter with your change." },
+  {
+    kind: "transport",
+    name: "Oshodi Danfo Park",
+    price: 200,
+    icon: "🚌",
+    blurb: "Owa! Owa! Enter with your change.",
+  },
   p("Mushin", "lightblue", 100, [6, 30, 90, 270, 400, 550], 50, "Strong area, stronger people."),
   { kind: "card", deck: "wahala", name: "Wahala" },
   p("Agege", "lightblue", 100, [6, 30, 90, 270, 400, 550], 50, "Agege bread is not a joke."),
@@ -58,32 +57,119 @@ export const BOARD: Space[] = [
   p("Yaba", "pink", 140, [10, 50, 150, 450, 625, 750], 100, "Yabacon Valley tech hub."),
   { kind: "utility", name: "NEPA", price: 150, icon: "💡", blurb: "Up NEPA! Light don come." },
   p("Surulere", "pink", 140, [10, 50, 150, 450, 625, 750], 100, "Stadium nights, buka days."),
-  p("Ebute Metta", "pink", 160, [12, 60, 180, 500, 700, 900], 100, "Old Lagos with railway history."),
-  { kind: "transport", name: "BRT Terminal", price: 200, icon: "🚍", blurb: "Blue bus, dedicated lane, small queue." },
-  p("Festac Town", "orange", 180, [14, 70, 200, 550, 750, 950], 100, "Planned estate, plenty roundabouts."),
+  p(
+    "Ebute Metta",
+    "pink",
+    160,
+    [12, 60, 180, 500, 700, 900],
+    100,
+    "Old Lagos with railway history.",
+  ),
+  {
+    kind: "transport",
+    name: "BRT Terminal",
+    price: 200,
+    icon: "🚍",
+    blurb: "Blue bus, dedicated lane, small queue.",
+  },
+  p(
+    "Festac Town",
+    "orange",
+    180,
+    [14, 70, 200, 550, 750, 950],
+    100,
+    "Planned estate, plenty roundabouts.",
+  ),
   { kind: "card", deck: "owambe", name: "Owambe" },
-  p("Gbagada", "orange", 180, [14, 70, 200, 550, 750, 950], 100, "Mid-mainland, close to everything."),
+  p(
+    "Gbagada",
+    "orange",
+    180,
+    [14, 70, 200, 550, 750, 950],
+    100,
+    "Mid-mainland, close to everything.",
+  ),
   p("Magodo", "orange", 200, [16, 80, 220, 600, 800, 1000], 100, "Gated, quiet, posh mainland."),
   { kind: "parking", name: "Go-Slow", sub: "Third Mainland traffic. Rest small." },
   p("Allen Avenue", "red", 220, [18, 90, 250, 700, 875, 1050], 150, "Ikeja's busiest strip."),
   { kind: "card", deck: "wahala", name: "Wahala" },
-  p("Maryland", "red", 220, [18, 90, 250, 700, 875, 1050], 150, "The mall, the bridge, the traffic."),
-  p("Ikeja GRA", "red", 240, [20, 100, 300, 750, 925, 1100], 150, "Government Reserved, quietly rich."),
-  { kind: "transport", name: "Blue Line Rail", price: 200, icon: "🚆", blurb: "Marina to Mile 2 — finally!" },
+  p(
+    "Maryland",
+    "red",
+    220,
+    [18, 90, 250, 700, 875, 1050],
+    150,
+    "The mall, the bridge, the traffic.",
+  ),
+  p(
+    "Ikeja GRA",
+    "red",
+    240,
+    [20, 100, 300, 750, 925, 1100],
+    150,
+    "Government Reserved, quietly rich.",
+  ),
+  {
+    kind: "transport",
+    name: "Blue Line Rail",
+    price: 200,
+    icon: "🚆",
+    blurb: "Marina to Mile 2 — finally!",
+  },
   p("Chevron", "yellow", 260, [22, 110, 330, 800, 975, 1150], 150, "Lekki corridor estates."),
   p("Oniru", "yellow", 260, [22, 110, 330, 800, 975, 1150], 150, "Beach, royalty and lounges."),
-  { kind: "utility", name: "Generator", price: 150, icon: "⚡", blurb: "When NEPA fails, gen don start." },
-  p("Lekki Phase 1", "yellow", 280, [24, 120, 360, 850, 1025, 1200], 150, "Admiralty Way soft life."),
+  {
+    kind: "utility",
+    name: "Generator",
+    price: 150,
+    icon: "⚡",
+    blurb: "When NEPA fails, gen don start.",
+  },
+  p(
+    "Lekki Phase 1",
+    "yellow",
+    280,
+    [24, 120, 360, 850, 1025, 1200],
+    150,
+    "Admiralty Way soft life.",
+  ),
   { kind: "gotojail", name: "LASTMA!", sub: "You don enter one-way. Go to Kirikiri" },
-  p("Victoria Island", "green", 300, [26, 130, 390, 900, 1100, 1275], 200, "Where the money sleeps."),
+  p(
+    "Victoria Island",
+    "green",
+    300,
+    [26, 130, 390, 900, 1100, 1275],
+    200,
+    "Where the money sleeps.",
+  ),
   p("Ikoyi", "green", 300, [26, 130, 390, 900, 1100, 1275], 200, "Old money, tall gates."),
   { kind: "card", deck: "owambe", name: "Owambe" },
   p("Parkview Estate", "green", 320, [28, 150, 450, 1000, 1200, 1400], 200, "Ikoyi within Ikoyi."),
-  { kind: "transport", name: "CMS Ferry", price: 200, icon: "⛴️", blurb: "Beat traffic on the lagoon." },
+  {
+    kind: "transport",
+    name: "CMS Ferry",
+    price: 200,
+    icon: "⛴️",
+    blurb: "Beat traffic on the lagoon.",
+  },
   { kind: "card", deck: "wahala", name: "Wahala" },
-  p("Eko Atlantic", "darkblue", 350, [35, 175, 500, 1100, 1300, 1500], 200, "A whole city built on the sea."),
+  p(
+    "Eko Atlantic",
+    "darkblue",
+    350,
+    [35, 175, 500, 1100, 1300, 1500],
+    200,
+    "A whole city built on the sea.",
+  ),
   { kind: "tax", name: "Area Boys Levy", amount: 100, sub: "Pay ₦100k 'settlement'" },
-  p("Banana Island", "darkblue", 400, [50, 200, 600, 1400, 1700, 2000], 200, "The richest square metres in Africa."),
+  p(
+    "Banana Island",
+    "darkblue",
+    400,
+    [50, 200, 600, 1400, 1700, 2000],
+    200,
+    "The richest square metres in Africa.",
+  ),
 ];
 
 export const GROUP_LABEL: Record<ColorGroup, string> = {

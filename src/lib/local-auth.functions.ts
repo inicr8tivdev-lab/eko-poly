@@ -2,17 +2,37 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 export const localSignUp = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => z.object({ email: z.string().max(200), password: z.string().max(200) }).parse(d))
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        email: z.string().max(200),
+        password: z.string().max(200),
+        clientCredentials: z
+          .array(z.object({ email: z.string(), password: z.string() }))
+          .optional(),
+      })
+      .parse(d),
+  )
   .handler(async ({ data }) => {
     const { localAuthSignUp } = await import("./local-online-store.server");
-    return localAuthSignUp(data.email, data.password);
+    return localAuthSignUp(data.email, data.password, data.clientCredentials);
   });
 
 export const localSignIn = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => z.object({ email: z.string().max(200), password: z.string().max(200) }).parse(d))
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        email: z.string().max(200),
+        password: z.string().max(200),
+        clientCredentials: z
+          .array(z.object({ email: z.string(), password: z.string() }))
+          .optional(),
+      })
+      .parse(d),
+  )
   .handler(async ({ data }) => {
     const { localAuthSignIn } = await import("./local-online-store.server");
-    return localAuthSignIn(data.email, data.password);
+    return localAuthSignIn(data.email, data.password, data.clientCredentials);
   });
 
 export const localGuestSignIn = createServerFn({ method: "POST" })

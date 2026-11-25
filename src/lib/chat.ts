@@ -1,13 +1,7 @@
 export const MAX_CHAT_LENGTH = 280;
 export const MAX_CHAT_HISTORY = 80;
 
-export const QUICK_CHAT_PHRASES = [
-  "Oya roll!",
-  "Pay up!",
-  "Wahala!",
-  "Nice deal",
-  "GG!",
-] as const;
+export const QUICK_CHAT_PHRASES = ["Oya roll!", "Pay up!", "Wahala!", "Nice deal", "GG!"] as const;
 
 export interface ChatMessage {
   id: string;
@@ -46,7 +40,10 @@ export function extractChatMessages(state: unknown): ChatMessage[] {
 }
 
 /** Idempotently appends a chat message by id and trims history to MAX_CHAT_HISTORY. */
-export function appendChatMessage(list: readonly ChatMessage[], message: ChatMessage): ChatMessage[] {
+export function appendChatMessage(
+  list: readonly ChatMessage[],
+  message: ChatMessage,
+): ChatMessage[] {
   if (list.some((m) => m.id === message.id)) {
     return list as ChatMessage[];
   }

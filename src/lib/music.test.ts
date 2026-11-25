@@ -67,7 +67,9 @@ describe("music preference and track playback", () => {
     expect(playMock).toHaveBeenCalledTimes(1);
     expect(createdAudio).toHaveLength(1);
     expect(createdAudio[0]?.src).toBe(MUSIC_TRACK_SRC);
-    expect(MUSIC_TRACK_SRC).toBe("/assets/aistudio/vadim_makes_sound-atlas-nigeria-560364_1ade5cc5.mp3");
+    expect(MUSIC_TRACK_SRC).toBe(
+      "/assets/aistudio/vadim_makes_sound-atlas-nigeria-560364_1ade5cc5.mp3",
+    );
     expect(createdAudio[0]?.loop).toBe(true);
 
     setMusicEnabled(false);

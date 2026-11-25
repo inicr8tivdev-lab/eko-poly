@@ -88,7 +88,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "description", content: "A Monopoly-style board game inspired by Lagos life." },
       { name: "author", content: "Ekopoly" },
       { property: "og:title", content: "Ekopoly — The Lagos Property Game" },
-      { property: "og:description", content: "A Monopoly-style board game inspired by Lagos life." },
+      {
+        property: "og:description",
+        content: "A Monopoly-style board game inspired by Lagos life.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],

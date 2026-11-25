@@ -249,7 +249,8 @@ export function canMortgage(s: GameState, pid: number, index: number): boolean {
   const sp = spaceAt(index);
   const h = holdingAt(s, index);
   if (!h || h.owner !== pid || h.mortgaged) return false;
-  if (sp.kind === "property") return groupMembers(sp.group).every((i) => holdingAt(s, i).houses === 0);
+  if (sp.kind === "property")
+    return groupMembers(sp.group).every((i) => holdingAt(s, i).houses === 0);
   return true;
 }
 
@@ -773,13 +774,17 @@ export function tradeProblem(s: GameState, from: number, t: TradeTerms): string 
   const b = s.players[t.to];
   if (!a || !b || a.id === b.id) return "Pick who you want to trade with.";
   if (a.bankrupt || b.bankrupt) return "Bankrupt players can't trade.";
-  if (t.give.length + t.get.length === 0 && t.giveCash === 0 && t.getCash === 0) return "Put something on the table.";
+  if (t.give.length + t.get.length === 0 && t.giveCash === 0 && t.getCash === 0)
+    return "Put something on the table.";
   if (t.give.length === 0 && t.get.length === 0) return "Add at least one property to the deal.";
   const ints = [t.giveCash, t.getCash].every((x) => Number.isInteger(x) && x >= 0);
   if (!ints) return "Cash must be a whole, positive amount.";
-  if (new Set(t.give).size !== t.give.length || new Set(t.get).size !== t.get.length) return "Each property can only be listed once.";
-  if (!t.give.every((i) => canTradeProperty(s, a.id, i))) return "Sell the buildings on a colour set before trading from it.";
-  if (!t.get.every((i) => canTradeProperty(s, b.id, i))) return `${b.name} has buildings on that colour set — they must sell them first.`;
+  if (new Set(t.give).size !== t.give.length || new Set(t.get).size !== t.get.length)
+    return "Each property can only be listed once.";
+  if (!t.give.every((i) => canTradeProperty(s, a.id, i)))
+    return "Sell the buildings on a colour set before trading from it.";
+  if (!t.get.every((i) => canTradeProperty(s, b.id, i)))
+    return `${b.name} has buildings on that colour set — they must sell them first.`;
   if (t.giveCash > Math.max(0, a.money)) return `${a.name} doesn't have that much cash.`;
   if (t.getCash > Math.max(0, b.money)) return `${b.name} doesn't have that much cash.`;
   return null;
@@ -787,7 +792,8 @@ export function tradeProblem(s: GameState, from: number, t: TradeTerms): string 
 
 function describeTrade(s: GameState, t: TradeOffer): string {
   const side = (props: number[], cash: number) =>
-    [...props.map((i) => spaceAt(i).name), ...(cash > 0 ? [`₦${cash}k`] : [])].join(" + ") || "nothing";
+    [...props.map((i) => spaceAt(i).name), ...(cash > 0 ? [`₦${cash}k`] : [])].join(" + ") ||
+    "nothing";
   return `${side(t.give, t.giveCash)} for ${side(t.get, t.getCash)}`;
 }
 
@@ -824,7 +830,11 @@ function endByNetWorth(s: GameState) {
   s.winner = best.id;
   s.phase = "gameover";
   s.round = s.maxRounds ?? s.round;
-  log(s, `Time up! ${best.name} is the richest in Lagos with ₦${netWorth(s, best.id)}k. 🎉`, best.id);
+  log(
+    s,
+    `Time up! ${best.name} is the richest in Lagos with ₦${netWorth(s, best.id)}k. 🎉`,
+    best.id,
+  );
 }
 
 function settleIfPaid(s: GameState) {
@@ -846,6 +856,10 @@ export function endGameEarly(g: GameState): GameState {
   s.phase = "gameover";
   s.auction = null;
   s.trade = null;
-  log(s, `The host ended the game. ${best.name} is the richest in Lagos with ₦${netWorth(s, best.id)}k. 🎉`, best.id);
+  log(
+    s,
+    `The host ended the game. ${best.name} is the richest in Lagos with ₦${netWorth(s, best.id)}k. 🎉`,
+    best.id,
+  );
   return s;
 }

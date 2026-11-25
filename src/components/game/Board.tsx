@@ -13,7 +13,12 @@ const TEMPLATE = `${CORNER}fr repeat(9, 1fr) ${CORNER}fr`;
 
 function cellOf(i: number): { row: number; col: number; side: Side } {
   if (i % 10 === 0) {
-    const map: Record<number, [number, number]> = { 0: [10, 10], 10: [10, 0], 20: [0, 0], 30: [0, 10] };
+    const map: Record<number, [number, number]> = {
+      0: [10, 10],
+      10: [10, 0],
+      20: [0, 0],
+      30: [0, 10],
+    };
     const [row, col] = map[i] ?? [10, 10];
     return { row, col, side: "corner" };
   }
@@ -148,7 +153,9 @@ function Cell({
       )}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-between gap-[0.2cqw] px-[0.3cqw] py-[0.5cqw] text-center">
         {space.kind !== "property" && <span className="text-cell-icon">{iconFor(space)}</span>}
-        <span className="text-cell font-semibold uppercase tracking-tight break-words">{space.name}</span>
+        <span className="text-cell font-semibold uppercase tracking-tight break-words">
+          {space.name}
+        </span>
         {isOwnable(space) ? (
           <span className="text-cell-sm opacity-70">{formatNaira(space.price)}</span>
         ) : space.kind === "tax" ? (
@@ -162,7 +169,12 @@ function Cell({
           className={cn(
             "absolute size-[1.4cqw] rounded-full border border-board-line",
             PLAYER_BG[owner],
-            { bottom: "bottom-[0.4cqw] right-[0.4cqw]", top: "top-[0.4cqw] left-[0.4cqw]", left: "bottom-[0.4cqw] left-[0.4cqw]", right: "right-[0.4cqw] top-[0.4cqw]" }[side],
+            {
+              bottom: "bottom-[0.4cqw] right-[0.4cqw]",
+              top: "top-[0.4cqw] left-[0.4cqw]",
+              left: "bottom-[0.4cqw] left-[0.4cqw]",
+              right: "right-[0.4cqw] top-[0.4cqw]",
+            }[side],
           )}
         />
       )}
@@ -207,11 +219,25 @@ function Corner({ space }: { space: Space }) {
   const c = config[space.kind] ?? { icon: "", cls: "" };
   const sub = "sub" in space ? space.sub : "";
   return (
-    <div className={cn("flex h-full w-full flex-col items-center justify-center gap-[0.6cqw] p-[0.8cqw] text-center", c.cls)}>
-      <span className={cn("text-corner", space.kind === "go" ? "font-display text-[clamp(14px,4.5cqw,46px)] font-black" : "text-[clamp(12px,3.4cqw,32px)]")}>
+    <div
+      className={cn(
+        "flex h-full w-full flex-col items-center justify-center gap-[0.6cqw] p-[0.8cqw] text-center",
+        c.cls,
+      )}
+    >
+      <span
+        className={cn(
+          "text-corner",
+          space.kind === "go"
+            ? "font-display text-[clamp(14px,4.5cqw,46px)] font-black"
+            : "text-[clamp(12px,3.4cqw,32px)]",
+        )}
+      >
         {space.kind === "go" ? "GO" : c.icon}
       </span>
-      {space.kind !== "go" && <span className="text-corner font-display font-bold uppercase">{space.name}</span>}
+      {space.kind !== "go" && (
+        <span className="text-corner font-display font-bold uppercase">{space.name}</span>
+      )}
       <span className="text-cell-sm opacity-80">{sub}</span>
     </div>
   );

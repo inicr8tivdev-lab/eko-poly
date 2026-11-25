@@ -8,7 +8,9 @@ vi.mock("./supabase", () => ({
 
 describe("fallbackPlayerName", () => {
   it("prefers an explicit entered name", () => {
-    expect(fallbackPlayerName({ id: "u1", email: "ada@example.com" }, "  Chief   Ada ")).toBe("Chief Ada");
+    expect(fallbackPlayerName({ id: "u1", email: "ada@example.com" }, "  Chief   Ada ")).toBe(
+      "Chief Ada",
+    );
   });
 
   it("uses user_metadata.display_name when present", () => {

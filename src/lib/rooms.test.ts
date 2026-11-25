@@ -48,7 +48,13 @@ describe("local online store", () => {
 
     const created = await db
       .from("games")
-      .insert({ host_id: host.session.user.id, mode: "online", status: "lobby", code, max_rounds: 30 })
+      .insert({
+        host_id: host.session.user.id,
+        mode: "online",
+        status: "lobby",
+        code,
+        max_rounds: 30,
+      })
       .select("id")
       .single();
     expect(created.error).toBeNull();
@@ -59,9 +65,12 @@ describe("local online store", () => {
       .insert({ game_id: gameId, user_id: host.session.user.id, seat: 0, display_name: "Host" });
     expect(p1.error).toBeNull();
 
-    const p2 = await db
-      .from("game_players")
-      .insert({ game_id: gameId, user_id: friend.session.user.id, seat: 1, display_name: "Friend" });
+    const p2 = await db.from("game_players").insert({
+      game_id: gameId,
+      user_id: friend.session.user.id,
+      seat: 1,
+      display_name: "Friend",
+    });
     expect(p2.error).toBeNull();
 
     setLocalRoomPlayerAvatar(host.session.user.id, gameId, "🦁");

@@ -59,7 +59,9 @@ export function cpuDecide(s: GameState): Action {
     case "trade": {
       const t = s.trade;
       if (!t) return { type: "rejectTrade" };
-      return tradeValue(s, t.to, t.from, t) > 20 ? { type: "acceptTrade" } : { type: "rejectTrade" };
+      return tradeValue(s, t.to, t.from, t) > 20
+        ? { type: "acceptTrade" }
+        : { type: "rejectTrade" };
     }
 
     case "debt": {
@@ -109,14 +111,20 @@ function allGroups(): ColorGroup[] {
 }
 
 function fullSets(s: GameState, pid: number): number {
-  return allGroups().filter((g) => groupMembers(g).every((i) => holdingAt(s, i).owner === pid)).length;
+  return allGroups().filter((g) => groupMembers(g).every((i) => holdingAt(s, i).owner === pid))
+    .length;
 }
 
 /**
  * How much better off `judge` is after the trade (₦k), counting colour sets
  * they complete and sets the other side completes.
  */
-export function tradeValue(s: GameState, judge: number, other: number, t: TradeTerms & { from: number }): number {
+export function tradeValue(
+  s: GameState,
+  judge: number,
+  other: number,
+  t: TradeTerms & { from: number },
+): number {
   const after = structuredClone(s);
   for (const i of t.give) holdingAt(after, i).owner = t.to;
   for (const i of t.get) holdingAt(after, i).owner = t.from;
@@ -137,7 +145,8 @@ function cpuTradeIdea(s: GameState): TradeTerms | null {
     if (missing.length !== 1) continue;
     const target = missing[0]!;
     const owner = holdingAt(s, target).owner;
-    if (owner === null || playerAt(s, owner).bankrupt || !canTradeProperty(s, owner, target)) continue;
+    if (owner === null || playerAt(s, owner).bankrupt || !canTradeProperty(s, owner, target))
+      continue;
     const sp = spaceAt(target);
     if (!isOwnable(sp)) continue;
     const cash = sp.price + SET_BONUS + 50;

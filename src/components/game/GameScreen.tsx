@@ -14,7 +14,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { cpuDecide } from "@/game/ai";
 import { formatNaira } from "@/game/board";
-import { actorOf, netWorth, playerAt, reduce, rollDice, type Action, type GameState } from "@/game/engine";
+import {
+  actorOf,
+  netWorth,
+  playerAt,
+  reduce,
+  rollDice,
+  type Action,
+  type GameState,
+} from "@/game/engine";
 import {
   clearPendingSounds,
   detectGameSounds,
@@ -155,7 +163,10 @@ export function GameScreen({
         sendingRef.current = true;
         setSending(true);
         // The server rolls the real dice; keep the shake going at least as long as a local roll.
-        void Promise.all([online.send({ type: "roll", dice }), new Promise((r) => setTimeout(r, 650))]).finally(() => {
+        void Promise.all([
+          online.send({ type: "roll", dice }),
+          new Promise((r) => setTimeout(r, 650)),
+        ]).finally(() => {
           sendingRef.current = false;
           setSending(false);
           setRolling(false);
@@ -229,7 +240,9 @@ export function GameScreen({
       <header className="flex items-center justify-between gap-2 border-b border-border px-3 py-2.5 sm:px-6 sm:py-3">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <img src={icon} alt="" width={36} height={36} className="size-8 shrink-0 sm:size-9" />
-          <span className="hidden font-display text-lg font-black tracking-tight text-primary sm:inline">EKOPOLY</span>
+          <span className="hidden font-display text-lg font-black tracking-tight text-primary sm:inline">
+            EKOPOLY
+          </span>
           {online && (
             <span className="shrink-0 rounded-md bg-secondary px-2 py-0.5 font-mono text-xs tracking-widest text-secondary-foreground">
               {online.code}
@@ -261,7 +274,9 @@ export function GameScreen({
               size="sm"
               className="relative lg:hidden"
               onClick={() => setChatOpen((o) => !o)}
-              aria-label={unreadChat > 0 ? `Open table chat (${unreadChat} unread)` : "Open table chat"}
+              aria-label={
+                unreadChat > 0 ? `Open table chat (${unreadChat} unread)` : "Open table chat"
+              }
               aria-expanded={chatOpen}
             >
               <MessageSquare />
@@ -299,7 +314,8 @@ export function GameScreen({
                 <AlertDialogHeader>
                   <AlertDialogTitle>End this game for everyone?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    The game will finish immediately and the player with the highest net worth will win.
+                    The game will finish immediately and the player with the highest net worth will
+                    win.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -314,8 +330,14 @@ export function GameScreen({
               </AlertDialogContent>
             </AlertDialog>
           )}
-          <Button variant="ghost" size="sm" onClick={onQuit} aria-label={online ? "Back to rooms" : "Leave game"}>
-            <LogOut /> <span className="hidden sm:inline">{online ? "Back to rooms" : "Leave game"}</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onQuit}
+            aria-label={online ? "Back to rooms" : "Leave game"}
+          >
+            <LogOut />{" "}
+            <span className="hidden sm:inline">{online ? "Back to rooms" : "Leave game"}</span>
           </Button>
         </div>
       </header>
@@ -340,7 +362,11 @@ export function GameScreen({
             onSelect={setSelected}
             onTrade={
               canTrade
-                ? (to) => setDraft({ from: game.current, terms: { to, give: [], get: [], giveCash: 0, getCash: 0 } })
+                ? (to) =>
+                    setDraft({
+                      from: game.current,
+                      terms: { to, give: [], get: [], giveCash: 0, getCash: 0 },
+                    })
                 : undefined
             }
           />
@@ -354,7 +380,13 @@ export function GameScreen({
               />
             </div>
           )}
-          <SpaceDetails state={game} index={selected} dispatch={dispatch} viewer={viewer} busy={rolling || sending} />
+          <SpaceDetails
+            state={game}
+            index={selected}
+            dispatch={dispatch}
+            viewer={viewer}
+            busy={rolling || sending}
+          />
           <GameLog state={game} />
         </aside>
       </main>
@@ -395,13 +427,16 @@ export function GameScreen({
             <div className="h-3 bg-danfo" />
             <div className="p-8">
               <Trophy className="mx-auto size-12 text-primary" />
-              <p className="mt-4 text-sm uppercase tracking-[0.3em] text-muted-foreground">Big Man of Lagos</p>
+              <p className="mt-4 text-sm uppercase tracking-[0.3em] text-muted-foreground">
+                Big Man of Lagos
+              </p>
               <div className="mt-3 flex items-center justify-center gap-3">
                 <PlayerAvatar player={winner} seatIndex={winner.id} className="size-12 text-2xl" />
                 <h2 className="font-display text-3xl font-black">{winner.name}</h2>
               </div>
               <p className="mt-3 text-muted-foreground">
-                Finished with {formatNaira(netWorth(game, winner.id))} in cash and property. Owambe for everybody!
+                Finished with {formatNaira(netWorth(game, winner.id))} in cash and property. Owambe
+                for everybody!
               </p>
               <Button variant="danfo" size="xl" className="mt-6 w-full" onClick={onNewGame}>
                 {online ? "Back to rooms" : "Play again"}

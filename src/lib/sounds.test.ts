@@ -20,7 +20,11 @@ function makeAudioMock() {
     stop,
   };
   const gain = {
-    gain: { setValueAtTime: vi.fn(), linearRampToValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() },
+    gain: {
+      setValueAtTime: vi.fn(),
+      linearRampToValueAtTime: vi.fn(),
+      exponentialRampToValueAtTime: vi.fn(),
+    },
     connect,
   };
   const bufferSrc = { buffer: null, connect, start };
@@ -33,7 +37,9 @@ function makeAudioMock() {
     resume: vi.fn(async () => {}),
     createOscillator: vi.fn(() => osc),
     createGain: vi.fn(() => gain),
-    createBuffer: vi.fn((_c: number, len: number) => ({ getChannelData: () => new Float32Array(len) })),
+    createBuffer: vi.fn((_c: number, len: number) => ({
+      getChannelData: () => new Float32Array(len),
+    })),
     createBufferSource: vi.fn(() => bufferSrc),
     createBiquadFilter: vi.fn(() => filter),
   };

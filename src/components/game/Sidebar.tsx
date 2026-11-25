@@ -49,20 +49,43 @@ export function PlayersPanel({
               <div className="min-w-0 flex-1">
                 <p className="flex items-center gap-2 truncate font-semibold">
                   {p.name}
-                  {viewer === p.id && <span className="rounded bg-primary/15 px-1.5 text-[10px] uppercase tracking-wider text-primary">You</span>}
-                  {p.isCpu && <span className="rounded bg-secondary px-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">CPU</span>}
-                  {p.inJail && <Lock className="size-3.5 text-destructive" aria-label="In Kirikiri" />}
+                  {viewer === p.id && (
+                    <span className="rounded bg-primary/15 px-1.5 text-[10px] uppercase tracking-wider text-primary">
+                      You
+                    </span>
+                  )}
+                  {p.isCpu && (
+                    <span className="rounded bg-secondary px-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                      CPU
+                    </span>
+                  )}
+                  {p.inJail && (
+                    <Lock className="size-3.5 text-destructive" aria-label="In Kirikiri" />
+                  )}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {p.bankrupt ? "Bankrupt — don japa" : `Worth ${formatNaira(netWorth(state, p.id))}`}
+                  {p.bankrupt
+                    ? "Bankrupt — don japa"
+                    : `Worth ${formatNaira(netWorth(state, p.id))}`}
                   {p.jailCards > 0 && ` · ${p.jailCards} free-exit card`}
                 </p>
               </div>
-              <p className={cn("font-display text-sm font-bold", p.money < 0 ? "text-destructive" : "text-primary")}>
+              <p
+                className={cn(
+                  "font-display text-sm font-bold",
+                  p.money < 0 ? "text-destructive" : "text-primary",
+                )}
+              >
                 {formatNaira(p.money)}
               </p>
               {onTrade && idx !== state.current && !p.bankrupt && (
-                <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => onTrade(p.id)} aria-label={`Trade with ${p.name}`}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2"
+                  onClick={() => onTrade(p.id)}
+                  aria-label={`Trade with ${p.name}`}
+                >
                   <ArrowLeftRight /> Trade
                 </Button>
               )}
@@ -84,7 +107,13 @@ export function PlayersPanel({
                         h.mortgaged && "opacity-40",
                       )}
                     >
-                      {sp.kind === "property" ? (h.houses === 5 ? "H" : h.houses || "") : sp.kind === "transport" || sp.kind === "utility" ? sp.icon : ""}
+                      {sp.kind === "property"
+                        ? h.houses === 5
+                          ? "H"
+                          : h.houses || ""
+                        : sp.kind === "transport" || sp.kind === "utility"
+                          ? sp.icon
+                          : ""}
                     </button>
                   );
                 })}
@@ -114,7 +143,13 @@ export function SpaceDetails({
   const sp = spaceAt(index);
   const h = state.holdings[index];
   const me = playerAt(state, state.current);
-  const mine = h?.owner === me.id && !me.isCpu && (viewer === undefined || viewer === me.id) && state.phase !== "gameover" && state.phase !== "auction" && state.phase !== "trade";
+  const mine =
+    h?.owner === me.id &&
+    !me.isCpu &&
+    (viewer === undefined || viewer === me.id) &&
+    state.phase !== "gameover" &&
+    state.phase !== "auction" &&
+    state.phase !== "trade";
   const owner = h?.owner != null ? playerAt(state, h.owner) : null;
 
   return (
@@ -126,7 +161,9 @@ export function SpaceDetails({
         )}
       >
         {sp.kind === "property" && (
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] opacity-80">{GROUP_LABEL[sp.group]}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] opacity-80">
+            {GROUP_LABEL[sp.group]}
+          </p>
         )}
         <h3 className="font-display text-lg font-bold uppercase">{sp.name}</h3>
       </div>
@@ -135,7 +172,9 @@ export function SpaceDetails({
         {"sub" in sp && <p className="text-center opacity-80">{sp.sub}</p>}
         {sp.kind === "card" && (
           <p className="text-center opacity-80">
-            {sp.deck === "wahala" ? "Lagos wahala — anything fit happen." : "Party time! Spray or be sprayed."}
+            {sp.deck === "wahala"
+              ? "Lagos wahala — anything fit happen."
+              : "Party time! Spray or be sprayed."}
           </p>
         )}
 
@@ -164,10 +203,14 @@ export function SpaceDetails({
           </table>
         )}
         {sp.kind === "transport" && (
-          <p className="text-center">Rent: ₦25k · ₦50k · ₦100k · ₦200k for owning 1–4 transport lines.</p>
+          <p className="text-center">
+            Rent: ₦25k · ₦50k · ₦100k · ₦200k for owning 1–4 transport lines.
+          </p>
         )}
         {sp.kind === "utility" && (
-          <p className="text-center">Rent: 4× dice roll (in ₦k), or 10× if you own both NEPA and Generator.</p>
+          <p className="text-center">
+            Rent: 4× dice roll (in ₦k), or 10× if you own both NEPA and Generator.
+          </p>
         )}
 
         {isOwnable(sp) && (
@@ -193,10 +236,20 @@ export function SpaceDetails({
           <div className="grid grid-cols-2 gap-2">
             {sp.kind === "property" && (
               <>
-                <Button size="sm" variant="go" disabled={!!busy || !canBuild(state, me.id, index) || state.phase === "debt"} onClick={() => dispatch({ type: "build", index })}>
+                <Button
+                  size="sm"
+                  variant="go"
+                  disabled={!!busy || !canBuild(state, me.id, index) || state.phase === "debt"}
+                  onClick={() => dispatch({ type: "build", index })}
+                >
                   {h.houses >= 4 ? <Hotel /> : <Home />} Build {formatNaira(sp.houseCost)}
                 </Button>
-                <Button size="sm" variant="secondary" disabled={!!busy || !canSell(state, me.id, index)} onClick={() => dispatch({ type: "sell", index })}>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={!!busy || !canSell(state, me.id, index)}
+                  onClick={() => dispatch({ type: "sell", index })}
+                >
                   Sell +{formatNaira(sp.houseCost / 2)}
                 </Button>
               </>
@@ -226,7 +279,8 @@ export function SpaceDetails({
             )}
             {sp.kind === "property" && !canBuild(state, me.id, index) && h.houses < 5 && (
               <p className="col-span-2 text-center text-xs opacity-70">
-                Own the whole {GROUP_LABEL[sp.group]} set (none mortgaged) and build evenly to add houses.
+                Own the whole {GROUP_LABEL[sp.group]} set (none mortgaged) and build evenly to add
+                houses.
               </p>
             )}
           </div>
@@ -245,7 +299,12 @@ export function GameLog({ state }: { state: GameState }) {
       <ul className="max-h-64 space-y-1.5 overflow-y-auto px-4 py-3 text-sm">
         {state.log.map((e) => (
           <li key={e.id} className="flex gap-2">
-            <span className={cn("mt-1.5 size-2 shrink-0 rounded-full", e.player !== null ? PLAYER_BG[e.player] : "bg-muted-foreground")} />
+            <span
+              className={cn(
+                "mt-1.5 size-2 shrink-0 rounded-full",
+                e.player !== null ? PLAYER_BG[e.player] : "bg-muted-foreground",
+              )}
+            />
             <span className="text-card-foreground/90">{e.text}</span>
           </li>
         ))}

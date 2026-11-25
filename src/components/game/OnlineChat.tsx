@@ -64,7 +64,10 @@ export function OnlineChat({
   return (
     <section
       aria-label={title}
-      className={cn("flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm", className)}
+      className={cn(
+        "flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm",
+        className,
+      )}
     >
       <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2">
         <p className="flex items-center gap-2 font-display text-xs font-bold uppercase tracking-widest text-muted-foreground">
@@ -90,7 +93,12 @@ export function OnlineChat({
         )}
       </div>
 
-      <div ref={listRef} className="max-h-52 min-h-28 space-y-2 overflow-y-auto px-4 py-3 text-sm" role="log" aria-live="polite">
+      <div
+        ref={listRef}
+        className="max-h-52 min-h-28 space-y-2 overflow-y-auto px-4 py-3 text-sm"
+        role="log"
+        aria-live="polite"
+      >
         {messages.length === 0 ? (
           <p className="py-4 text-center text-xs text-muted-foreground">
             No messages yet — say hello or drop some Eko banter!
@@ -103,17 +111,29 @@ export function OnlineChat({
               <div key={m.id} className="flex items-start gap-2">
                 <span
                   aria-hidden="true"
-                  className={cn("mt-1.5 size-2 shrink-0 rounded-full", PLAYER_BG[m.seat % PLAYER_BG.length])}
+                  className={cn(
+                    "mt-1.5 size-2 shrink-0 rounded-full",
+                    PLAYER_BG[m.seat % PLAYER_BG.length],
+                  )}
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-1.5">
-                    <span className={cn("text-xs font-semibold", isMine ? "text-primary" : "text-foreground")}>
+                    <span
+                      className={cn(
+                        "text-xs font-semibold",
+                        isMine ? "text-primary" : "text-foreground",
+                      )}
+                    >
                       {m.sender}
                       {isMine ? " (You)" : ""}
                     </span>
-                    {timeLabel && <span className="text-[10px] text-muted-foreground">{timeLabel}</span>}
+                    {timeLabel && (
+                      <span className="text-[10px] text-muted-foreground">{timeLabel}</span>
+                    )}
                   </div>
-                  <p className="break-words text-sm leading-snug text-card-foreground/95">{m.text}</p>
+                  <p className="break-words text-sm leading-snug text-card-foreground/95">
+                    {m.text}
+                  </p>
                 </div>
               </div>
             );

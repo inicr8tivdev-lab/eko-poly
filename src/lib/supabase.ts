@@ -1,9 +1,40 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
-import { brokeredPreviewStorage, type PreviewAuthStorage } from "@/integrations/supabase/previewAuthStorage";
+import {
+  brokeredPreviewStorage,
+  type PreviewAuthStorage,
+} from "@/integrations/supabase/previewAuthStorage";
 import { getPublicSupabaseConfig } from "@/integrations/supabase/publicConfig";
 
 const LOCAL_SESSION_KEY = "ekopoly-local-auth-session";
+const CREDENTIALS_KEY = "ekopoly-credentials-v1";
+
+function getLocalCredentials(): Array<{ email: string; password: string }> {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(CREDENTIALS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalCredential(email: string, password: string) {
+  if (typeof window === "undefined") return;
+  try {
+    const creds = getLocalCredentials();
+    const cleanEmail = email.trim().toLowerCase();
+    const existingIndex = creds.findIndex((c) => c.email.trim().toLowerCase() === cleanEmail);
+    if (existingIndex >= 0) {
+      creds[existingIndex] = { email: cleanEmail, password };
+    } else {
+      creds.push({ email: cleanEmail, password });
+    }
+    window.localStorage.setItem(CREDENTIALS_KEY, JSON.stringify(creds));
+  } catch {
+    // ignore
+  }
+}
 
 type LocalSession = {
   access_token: string;
@@ -40,7 +71,12 @@ export function getSupabaseStorageKey(): string | null {
 function serverSupabaseUrl(publicUrl: string, supabaseKey: string): string | undefined {
   if (typeof window !== "undefined" || typeof process === "undefined") return undefined;
   const serverUrl = process.env["SUPABASE_URL"]?.replace(/\/+$/, "");
-  if (!serverUrl || serverUrl === publicUrl || process.env["SUPABASE_PUBLISHABLE_KEY"] !== supabaseKey) return undefined;
+  if (
+    !serverUrl ||
+    serverUrl === publicUrl ||
+    process.env["SUPABASE_PUBLISHABLE_KEY"] !== supabaseKey
+  )
+    return undefined;
   return serverUrl;
 }
 
@@ -57,7 +93,10 @@ function createSupabaseFetch(supabaseUrl: string, supabaseKey: string): typeof f
     }
 
     // New Supabase API keys are opaque strings, not bearer JWTs.
-    if (isNewSupabaseApiKey(supabaseKey) && headers.get("Authorization") === `Bearer ${supabaseKey}`) {
+    if (
+      isNewSupabaseApiKey(supabaseKey) &&
+      headers.get("Authorization") === `Bearer ${supabaseKey}`
+    ) {
       headers.delete("Authorization");
     }
 
@@ -66,7 +105,8 @@ function createSupabaseFetch(supabaseUrl: string, supabaseKey: string): typeof f
       const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
       if (url.startsWith(`${publicUrl}/`)) {
         const target = serverUrl + url.slice(publicUrl.length);
-        const request = typeof input === "string" || input instanceof URL ? target : new Request(target, input);
+        const request =
+          typeof input === "string" || input instanceof URL ? target : new Request(target, input);
         return fetch(request, { ...init, headers });
       }
     }
@@ -237,19 +277,29 @@ function createLocalSupabaseClient(): ReturnType<typeof createClient<Database>> 
         };
       },
       signInWithPassword: async ({ email, password }: { email: string; password: string }) => {
+        saveLocalCredential(email, password);
         const { localSignIn } = await import("@/lib/local-auth.functions");
-        const res = await localSignIn({ data: { email, password } });
+        const clientCredentials = getLocalCredentials();
+        const res = await localSignIn({ data: { email, password, clientCredentials } });
         if (!res.ok) {
-          return { data: { user: null, session: null }, error: { message: res.error, name: "AuthApiError", status: 400 } };
+          return {
+            data: { user: null, session: null },
+            error: { message: res.error, name: "AuthApiError", status: 400 },
+          };
         }
         writeLocalSession(res.session, "SIGNED_IN");
         return { data: { user: res.session.user, session: res.session }, error: null };
       },
       signUp: async ({ email, password }: { email: string; password: string }) => {
+        saveLocalCredential(email, password);
         const { localSignUp } = await import("@/lib/local-auth.functions");
-        const res = await localSignUp({ data: { email, password } });
+        const clientCredentials = getLocalCredentials();
+        const res = await localSignUp({ data: { email, password, clientCredentials } });
         if (!res.ok) {
-          return { data: { user: null, session: null }, error: { message: res.error, name: "AuthApiError", status: 400 } };
+          return {
+            data: { user: null, session: null },
+            error: { message: res.error, name: "AuthApiError", status: 400 },
+          };
         }
         writeLocalSession(res.session, "SIGNED_IN");
         return { data: { user: res.session.user, session: res.session }, error: null };

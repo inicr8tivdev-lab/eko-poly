@@ -4,7 +4,13 @@ import type { GameState } from "@/game/engine";
 import { loadSavedAvatar } from "./avatar";
 import { extractChatMessages, type ChatMessage } from "./chat";
 import { MAX_PLAYERS } from "./rooms";
-import { getMyProfileAvatar, getMyProfileName, getMyRooms, getOpenLobbies, getRoomState } from "./rooms.functions";
+import {
+  getMyProfileAvatar,
+  getMyProfileName,
+  getMyRooms,
+  getOpenLobbies,
+  getRoomState,
+} from "./rooms.functions";
 
 export interface RoomPlayer {
   user_id: string;
@@ -83,7 +89,9 @@ export const roomQuery = (code: string) =>
       }
       const { data, error } = await supabase
         .from("games")
-        .select("id, code, status, host_id, max_rounds, state, version, winner_name, game_players(user_id, seat, display_name)")
+        .select(
+          "id, code, status, host_id, max_rounds, state, version, winner_name, game_players(user_id, seat, display_name)",
+        )
         .eq("code", code)
         .eq("mode", "online")
         .maybeSingle();
@@ -146,11 +154,15 @@ export const myRoomsQuery = (userId?: string) =>
           .select("game_id")
           .eq("user_id", userId);
         if (memErr) throw memErr;
-        const gameIds = Array.from(new Set((memberships ?? []).map((m) => m.game_id).filter(Boolean)));
+        const gameIds = Array.from(
+          new Set((memberships ?? []).map((m) => m.game_id).filter(Boolean)),
+        );
         if (gameIds.length === 0) return [];
         const { data, error } = await supabase
           .from("games")
-          .select("id, code, status, max_rounds, host_id, updated_at, game_players(display_name, user_id, seat)")
+          .select(
+            "id, code, status, max_rounds, host_id, updated_at, game_players(display_name, user_id, seat)",
+          )
           .eq("mode", "online")
           .in("id", gameIds)
           .in("status", ["lobby", "playing"])
@@ -164,7 +176,9 @@ export const myRoomsQuery = (userId?: string) =>
       }
       const { data, error } = await supabase
         .from("games")
-        .select("id, code, status, max_rounds, host_id, updated_at, game_players(display_name, user_id, seat)")
+        .select(
+          "id, code, status, max_rounds, host_id, updated_at, game_players(display_name, user_id, seat)",
+        )
         .eq("mode", "online")
         .in("status", ["lobby", "playing"])
         .order("updated_at", { ascending: false })
@@ -189,7 +203,9 @@ export const openLobbiesQuery = () =>
       }
       const { data, error } = await supabase
         .from("games")
-        .select("id, code, status, max_rounds, host_id, updated_at, game_players(display_name, user_id, seat)")
+        .select(
+          "id, code, status, max_rounds, host_id, updated_at, game_players(display_name, user_id, seat)",
+        )
         .eq("mode", "online")
         .eq("status", "lobby")
         .order("updated_at", { ascending: false })
@@ -208,7 +224,11 @@ export const myNameQuery = (userId: string) =>
         if (!isSupabaseConfigured()) {
           return await getMyProfileName();
         }
-        const { data } = await supabase.from("profiles").select("display_name").eq("id", userId).maybeSingle();
+        const { data } = await supabase
+          .from("profiles")
+          .select("display_name")
+          .eq("id", userId)
+          .maybeSingle();
         return data?.display_name ?? "";
       } catch {
         return "";

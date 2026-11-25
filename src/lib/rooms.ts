@@ -8,7 +8,10 @@ export const CODE_LENGTH = 6;
 export const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 
 export function normalizeCode(raw: string): string {
-  return raw.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, CODE_LENGTH);
+  return raw
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, CODE_LENGTH);
 }
 
 export function isValidCode(code: string): boolean {
@@ -16,7 +19,10 @@ export function isValidCode(code: string): boolean {
 }
 
 export function makeCode(randomInts: Uint32Array): string {
-  return Array.from(randomInts.slice(0, CODE_LENGTH), (n) => CODE_ALPHABET[n % CODE_ALPHABET.length]).join("");
+  return Array.from(
+    randomInts.slice(0, CODE_LENGTH),
+    (n) => CODE_ALPHABET[n % CODE_ALPHABET.length],
+  ).join("");
 }
 
 export function cleanName(raw: string): string {

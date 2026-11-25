@@ -7,7 +7,10 @@ export interface AuthUserLike {
   user_metadata?: Record<string, unknown> | null;
 }
 
-export function fallbackPlayerName(user: AuthUserLike | null | undefined, preferredName?: string): string {
+export function fallbackPlayerName(
+  user: AuthUserLike | null | undefined,
+  preferredName?: string,
+): string {
   const explicit = preferredName?.trim();
   if (explicit) return cleanName(explicit);
   const metaName =
