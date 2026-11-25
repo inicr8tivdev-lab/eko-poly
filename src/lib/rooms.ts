@@ -63,5 +63,9 @@ export const actionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("mortgage"), index: idx }),
   z.object({ type: z.literal("unmortgage"), index: idx }),
   z.object({ type: z.literal("bankrupt") }),
+  z.object({
+    type: z.literal("revealMission"),
+    playerId: z.number().int().min(0).max(3).optional(),
+  }),
 ]);
 export type OnlineMove = z.infer<typeof actionSchema>;

@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { JAIL_FINE, formatNaira, isOwnable, spaceAt } from "@/game/board";
+import { formatNaira, isOwnable, spaceAt } from "@/game/board";
 import {
   BID_STEP,
   actorOf,
+  jailFineFor,
   maxRaisable,
   playerAt,
+  propertyPriceFor,
   type Action,
   type GameState,
 } from "@/game/engine";
@@ -150,10 +152,10 @@ function Actions({ state, rolling, sending, onRoll, dispatch, onCounter, viewer 
               <Button
                 variant="onCenter"
                 size="sm"
-                disabled={busy || p.money < JAIL_FINE}
+                disabled={busy || p.money < jailFineFor(state)}
                 onClick={() => dispatch({ type: "payJail" })}
               >
-                Pay {formatNaira(JAIL_FINE)}
+                Pay {formatNaira(jailFineFor(state))}
               </Button>
               {p.jailCards > 0 && (
                 <Button
@@ -173,39 +175,50 @@ function Actions({ state, rolling, sending, onRoll, dispatch, onCounter, viewer 
           </Button>
         )
       ) : state.phase === "buy" && isOwnable(here) ? (
-        <>
-          <p className="text-center text-sm @min-[620px]/game:text-[clamp(11px,1.8cqw,16px)]">
-            Buy <strong>{here.name}</strong> for <strong>{formatNaira(here.price)}</strong>?
-          </p>
-          <div className="flex flex-wrap justify-center gap-2">
-            <Button
-              variant="danfo"
-              disabled={busy || p.money < here.price}
-              onClick={() => dispatch({ type: "buy" })}
-            >
-              Buy am
-            </Button>
-            <Button
-              variant="onCenter"
-              disabled={busy}
-              onClick={() => dispatch({ type: "auction" })}
-            >
-              {p.money < here.price ? "Let everybody bid" : "Auction it"}
-            </Button>
-            <Button
-              variant="onCenter"
-              disabled={busy}
-              onClick={() => dispatch({ type: "decline" })}
-            >
-              Pass
-            </Button>
-          </div>
-          {p.money < here.price && (
-            <p className="text-center text-xs opacity-80 @min-[620px]/game:text-[clamp(9px,1.4cqw,12px)]">
-              Not enough cash — mortgage something, or put it up for bidding.
-            </p>
-          )}
-        </>
+        (() => {
+          const buyPrice = propertyPriceFor(state, p.position);
+          return (
+            <>
+              <p className="text-center text-sm @min-[620px]/game:text-[clamp(11px,1.8cqw,16px)]">
+                Buy <strong>{here.name}</strong> for <strong>{formatNaira(buyPrice)}</strong>
+                {buyPrice !== here.price && (
+                  <span className="ml-1 text-xs line-through opacity-70">
+                    {formatNaira(here.price)}
+                  </span>
+                )}
+                ?
+              </p>
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button
+                  variant="danfo"
+                  disabled={busy || p.money < buyPrice}
+                  onClick={() => dispatch({ type: "buy" })}
+                >
+                  Buy am
+                </Button>
+                <Button
+                  variant="onCenter"
+                  disabled={busy}
+                  onClick={() => dispatch({ type: "auction" })}
+                >
+                  {p.money < buyPrice ? "Let everybody bid" : "Auction it"}
+                </Button>
+                <Button
+                  variant="onCenter"
+                  disabled={busy}
+                  onClick={() => dispatch({ type: "decline" })}
+                >
+                  Pass
+                </Button>
+              </div>
+              {p.money < buyPrice && (
+                <p className="text-center text-xs opacity-80 @min-[620px]/game:text-[clamp(9px,1.4cqw,12px)]">
+                  Not enough cash — mortgage something, or put it up for bidding.
+                </p>
+              )}
+            </>
+          );
+        })()
       ) : state.phase === "debt" ? (
         <>
           <p className="text-center text-sm @min-[620px]/game:text-[clamp(10px,1.7cqw,15px)]">

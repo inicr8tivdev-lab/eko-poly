@@ -333,10 +333,20 @@ export const sendMove = createServerFn({ method: "POST" })
       return { ok: false, error: "This game isn't running." };
 
     const state = game.state as unknown as GameState;
-    if (!canAct(state, me.seat)) return { ok: false, error: "Hold on — it's not your move." };
-
-    const action: Action =
-      data.move.type === "roll" ? { type: "roll", dice: rollDice() } : (data.move as Action);
+    let action: Action;
+    if (data.move.type === "revealMission") {
+      if (state.phase === "gameover") {
+        return { ok: false, error: "This game has already finished." };
+      }
+      if (data.move.playerId !== undefined && data.move.playerId !== me.seat) {
+        return { ok: false, error: "You can only reveal your own secret mission." };
+      }
+      action = { type: "revealMission", playerId: me.seat };
+    } else {
+      if (!canAct(state, me.seat)) return { ok: false, error: "Hold on — it's not your move." };
+      action =
+        data.move.type === "roll" ? { type: "roll", dice: rollDice() } : (data.move as Action);
+    }
     const next = reduce(state, action);
     if (next === state) return { ok: false, error: "That move isn't allowed right now." };
 

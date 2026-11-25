@@ -3,7 +3,9 @@ import {
   BID_STEP,
   canBuild,
   canTradeProperty,
+  houseCostFor,
   netWorth,
+  propertyPriceFor,
   tradeProblem,
   canMortgage,
   canSell,
@@ -34,11 +36,12 @@ export function cpuDecide(s: GameState): Action {
     case "buy": {
       const sp = spaceAt(p.position);
       if (!isOwnable(sp)) return { type: "decline" };
-      if (p.money < sp.price) return { type: "auction" };
+      const price = propertyPriceFor(s, p.position);
+      if (p.money < price) return { type: "auction" };
       const completes =
         sp.kind === "property" &&
         groupMembers(sp.group).every((i) => i === p.position || holdingAt(s, i).owner === p.id);
-      return p.money - sp.price >= 120 || completes ? { type: "buy" } : { type: "auction" };
+      return p.money - price >= 120 || completes ? { type: "buy" } : { type: "auction" };
     }
 
     case "auction": {
@@ -87,7 +90,7 @@ export function cpuDecide(s: GameState): Action {
         .filter((i) => canBuild(s, p.id, i))
         .filter((i) => {
           const sp = spaceAt(i);
-          return sp.kind === "property" && p.money - sp.houseCost >= 200;
+          return sp.kind === "property" && p.money - houseCostFor(s, i) >= 200;
         })
         .sort((a, b) => b - a);
       if (buildable[0] !== undefined) return { type: "build", index: buildable[0] };

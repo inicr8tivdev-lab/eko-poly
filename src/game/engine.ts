@@ -10,6 +10,15 @@ import {
   type ColorGroup,
 } from "./board";
 import { OWAMBE, WAHALA } from "./cards";
+import { EVENT_INTERVAL_ROUNDS, LAGOS_EVENTS, type LagosEvent } from "./events";
+import {
+  LAGOS_MISSIONS,
+  computeMissionProgress,
+  emptyMissionStats,
+  missionById,
+  type PlayerMissionState,
+  type PlayerMissionStats,
+} from "./missions";
 import type { ChatMessage } from "@/lib/chat";
 
 export const TOKENS = [
@@ -104,6 +113,11 @@ export interface GameState {
   /** Game ends after this many rounds (richest wins); null = play until one player is left. */
   maxRounds: number | null;
   chat?: ChatMessage[] | undefined;
+  activeEvent?: LagosEvent | null | undefined;
+  eventExpiresAtRound?: number | undefined;
+  eventHistory?: string[] | undefined;
+  missions?: Record<number, PlayerMissionState> | undefined;
+  missionStats?: Record<number, PlayerMissionStats> | undefined;
 }
 
 export type Action =
@@ -123,7 +137,8 @@ export type Action =
   | { type: "sell"; index: number }
   | { type: "mortgage"; index: number }
   | { type: "unmortgage"; index: number }
-  | { type: "bankrupt" };
+  | { type: "bankrupt" }
+  | { type: "revealMission"; playerId?: number | undefined };
 
 export interface PlayerConfig {
   name: string;
@@ -142,6 +157,29 @@ function shuffle(n: number, rng: () => number): number[] {
   return arr;
 }
 
+export function triggerRandomLagosEvent(s: GameState, rng: () => number = Math.random) {
+  const history = (s.eventHistory ??= []);
+  const available = LAGOS_EVENTS.filter((ev) => !history.slice(-10).includes(ev.id));
+  const pool = available.length > 0 ? available : LAGOS_EVENTS;
+  const chosen = pool[Math.floor(rng() * pool.length)]!;
+  s.activeEvent = chosen;
+  s.eventExpiresAtRound = s.round + chosen.durationRounds;
+  history.push(chosen.id);
+
+  if (chosen.effectType === "all_players_cash") {
+    for (const p of s.players) {
+      if (!p.bankrupt) p.money += chosen.value;
+    }
+    log(
+      s,
+      `Lagos Event: ${chosen.title} — ${chosen.description} (All active players received ₦${chosen.value}k)`,
+      null,
+    );
+  } else {
+    log(s, `Lagos Event: ${chosen.title} — ${chosen.description}`, null);
+  }
+}
+
 export function createGame(
   configs: PlayerConfig[],
   rng: () => number = Math.random,
@@ -151,6 +189,15 @@ export function createGame(
   BOARD.forEach((s, i) => {
     if (isOwnable(s)) holdings[i] = { owner: null, houses: 0, mortgaged: false };
   });
+  const missionOrder = shuffle(LAGOS_MISSIONS.length, rng);
+  const missions: Record<number, PlayerMissionState> = {};
+  const missionStats: Record<number, PlayerMissionStats> = {};
+  configs.forEach((_, i) => {
+    const picked = LAGOS_MISSIONS[missionOrder[i]!]!;
+    missions[i] = { missionId: picked.id, completed: false, revealed: false };
+    missionStats[i] = emptyMissionStats();
+  });
+
   const state: GameState = {
     players: configs.map((c, i) => ({
       id: i,
@@ -182,6 +229,11 @@ export function createGame(
     turn: 1,
     round: 1,
     maxRounds,
+    activeEvent: null,
+    eventExpiresAtRound: 0,
+    eventHistory: [],
+    missions,
+    missionStats,
   };
   log(state, "Welcome to Eko! First to bankrupt everybody wins. Eko o ni baje!", null);
   return state;
@@ -213,17 +265,69 @@ function countOwned(s: GameState, pid: number, kind: "transport" | "utility"): n
   return BOARD.filter((sp, i) => sp.kind === kind && holdingAt(s, i).owner === pid).length;
 }
 
+export function propertyPriceFor(s: GameState, index: number): number {
+  const sp = spaceAt(index);
+  if (!isOwnable(sp)) return 0;
+  if (s.activeEvent?.effectType === "property_value_modifier") {
+    return Math.max(10, Math.round(sp.price * s.activeEvent.value));
+  }
+  return sp.price;
+}
+
+export function houseCostFor(s: GameState, index: number): number {
+  const sp = spaceAt(index);
+  if (sp.kind !== "property") return 0;
+  if (s.activeEvent?.effectType === "building_cost_modifier") {
+    return Math.max(25, sp.houseCost + s.activeEvent.value);
+  }
+  return sp.houseCost;
+}
+
+export function jailFineFor(s: GameState): number {
+  if (s.activeEvent?.effectType === "jail_fee_modifier") {
+    return Math.max(10, JAIL_FINE + s.activeEvent.value);
+  }
+  return JAIL_FINE;
+}
+
+export function taxAmountFor(s: GameState, baseAmount: number): number {
+  if (s.activeEvent?.effectType === "tax_modifier") {
+    return Math.max(0, baseAmount + s.activeEvent.value);
+  }
+  return baseAmount;
+}
+
+export function goSalaryFor(s: GameState): number {
+  if (s.activeEvent?.effectType === "pass_go_bonus") {
+    return Math.max(50, GO_SALARY + s.activeEvent.value);
+  }
+  return GO_SALARY;
+}
+
 export function rentFor(s: GameState, index: number, diceTotal: number): number {
   const sp = spaceAt(index);
   const h = holdingAt(s, index);
   if (!h || h.owner === null || h.mortgaged) return 0;
+  let baseRent = 0;
   if (sp.kind === "property") {
-    if (h.houses > 0) return sp.rent[h.houses] ?? 0;
-    return ownsGroup(s, h.owner, sp.group) ? sp.rent[0] * 2 : sp.rent[0];
+    baseRent =
+      h.houses > 0
+        ? (sp.rent[h.houses] ?? 0)
+        : ownsGroup(s, h.owner, sp.group)
+          ? sp.rent[0] * 2
+          : sp.rent[0];
+  } else if (sp.kind === "transport") {
+    baseRent = 25 * 2 ** (countOwned(s, h.owner, "transport") - 1);
+  } else if (sp.kind === "utility") {
+    baseRent = (countOwned(s, h.owner, "utility") === 2 ? 10 : 4) * diceTotal;
   }
-  if (sp.kind === "transport") return 25 * 2 ** (countOwned(s, h.owner, "transport") - 1);
-  if (sp.kind === "utility") return (countOwned(s, h.owner, "utility") === 2 ? 10 : 4) * diceTotal;
-  return 0;
+  if (baseRent > 0 && s.activeEvent?.effectType === "rent_multiplier") {
+    const target = s.activeEvent.targetGroup;
+    if (!target || (sp.kind === "property" && sp.group === target) || sp.kind === target) {
+      baseRent = Math.max(1, Math.round(baseRent * s.activeEvent.value));
+    }
+  }
+  return baseRent;
 }
 
 export function canBuild(s: GameState, pid: number, index: number): boolean {
@@ -234,7 +338,7 @@ export function canBuild(s: GameState, pid: number, index: number): boolean {
   const members = groupMembers(sp.group);
   if (members.some((i) => holdingAt(s, i).mortgaged)) return false;
   const min = Math.min(...members.map((i) => holdingAt(s, i).houses));
-  return h.houses <= min && playerAt(s, pid).money >= sp.houseCost;
+  return h.houses <= min && playerAt(s, pid).money >= houseCostFor(s, index);
 }
 
 export function canSell(s: GameState, pid: number, index: number): boolean {
@@ -314,11 +418,35 @@ function transfer(s: GameState, from: number, to: number | null, amount: number)
   if (from === s.current && playerAt(s, from).money < 0) s.debtTo = to;
 }
 
+function statsFor(s: GameState, pid: number): PlayerMissionStats {
+  const all = (s.missionStats ??= {});
+  return (all[pid] ??= emptyMissionStats());
+}
+
+function evaluateMissions(s: GameState) {
+  if (!s.missions) return;
+  for (const pl of s.players) {
+    if (pl.bankrupt) continue;
+    const ms = s.missions[pl.id];
+    if (!ms || ms.completed) continue;
+    const mission = missionById(ms.missionId);
+    if (!mission) continue;
+    const progress = computeMissionProgress(s, pl.id, mission);
+    if (!progress.done) continue;
+    ms.completed = true;
+    ms.completedTurn = s.turn;
+    pl.money += mission.rewardCash;
+    if (mission.rewardJailCards) pl.jailCards += mission.rewardJailCards;
+  }
+}
+
 function moveForwardTo(s: GameState, to: number) {
   const p = cur(s);
   if (to < p.position || (to === 0 && p.position !== 0)) {
-    p.money += GO_SALARY;
-    log(s, `${p.name} passed GO and collected ₦${GO_SALARY}k salary.`);
+    const salary = goSalaryFor(s);
+    p.money += salary;
+    statsFor(s, p.id).passedGoCount += 1;
+    log(s, `${p.name} passed GO and collected ₦${salary}k salary.`);
   }
   p.position = to;
 }
@@ -420,13 +548,19 @@ function landOn(s: GameState, diceTotal: number) {
       }
       const rent = rentFor(s, p.position, diceTotal);
       transfer(s, p.id, h.owner, rent);
+      const ownerStats = statsFor(s, h.owner);
+      ownerStats.rentCollectedCount += 1;
+      ownerStats.rentCollectedAmount += rent;
+      if (!ownerStats.rentPayers.includes(p.id)) ownerStats.rentPayers.push(p.id);
       log(s, `${p.name} paid ₦${rent}k rent to ${playerAt(s, h.owner).name} for ${sp.name}.`);
       return;
     }
-    case "tax":
-      transfer(s, p.id, null, sp.amount);
-      log(s, `${p.name} paid ₦${sp.amount}k ${sp.name}.`);
+    case "tax": {
+      const taxAmount = taxAmountFor(s, sp.amount);
+      transfer(s, p.id, null, taxAmount);
+      log(s, `${p.name} paid ₦${taxAmount}k ${sp.name}.`);
       return;
+    }
     case "card":
       drawCard(s, sp.deck, diceTotal);
       return;
@@ -466,6 +600,14 @@ function nextPlayer(s: GameState) {
       endByNetWorth(s);
       return;
     }
+    if (s.activeEvent && s.eventExpiresAtRound !== undefined && s.round >= s.eventExpiresAtRound) {
+      log(s, `Lagos Event ended: ${s.activeEvent.title} effects have expired.`, null);
+      s.activeEvent = null;
+      s.eventExpiresAtRound = 0;
+    }
+    if (!s.activeEvent && s.round % EVENT_INTERVAL_ROUNDS === 0) {
+      triggerRandomLagosEvent(s);
+    }
   }
   s.current = i;
   s.phase = "roll";
@@ -495,12 +637,19 @@ export function canAct(g: GameState, seat: number): boolean {
 export function reduce(prev: GameState, action: Action): GameState {
   if (prev.phase === "gameover") return prev;
   const s: GameState = structuredClone(prev);
+  const changed = applyAction(s, action);
+  if (!changed) return prev;
+  evaluateMissions(s);
+  return s;
+}
+
+function applyAction(s: GameState, action: Action): boolean {
   const p = cur(s);
   const manage = s.phase === "roll" || s.phase === "end" || s.phase === "buy" || s.phase === "debt";
 
   switch (action.type) {
     case "roll": {
-      if (s.phase !== "roll") return prev;
+      if (s.phase !== "roll") return false;
       const [a, b] = action.dice;
       const total = a + b;
       const isDouble = a === b;
@@ -518,18 +667,19 @@ export function reduce(prev: GameState, action: Action): GameState {
           if (p.jailTurns < 3) {
             log(s, `${p.name} is still in Kirikiri (${p.jailTurns}/3).`);
             s.phase = "end";
-            return s;
+            return true;
           }
           p.inJail = false;
           p.jailTurns = 0;
-          transfer(s, p.id, null, JAIL_FINE);
-          log(s, `${p.name} paid ₦${JAIL_FINE}k bail after 3 turns.`);
+          const fine = jailFineFor(s);
+          transfer(s, p.id, null, fine);
+          log(s, `${p.name} paid ₦${fine}k bail after 3 turns.`);
         }
       } else if (isDouble) {
         s.doubles += 1;
         if (s.doubles >= 3) {
           sendToJail(s, "Three doubles in a row? Over-speeding!");
-          return s;
+          return true;
         }
         s.extraRoll = true;
       } else {
@@ -538,73 +688,76 @@ export function reduce(prev: GameState, action: Action): GameState {
       moveForwardTo(s, (p.position + total) % BOARD.length);
       landOn(s, total);
       afterStep(s);
-      return s;
+      return true;
     }
 
     case "buy": {
-      if (s.phase !== "buy") return prev;
+      if (s.phase !== "buy") return false;
       const sp = spaceAt(p.position);
-      if (!isOwnable(sp) || p.money < sp.price) return prev;
-      p.money -= sp.price;
+      const price = propertyPriceFor(s, p.position);
+      if (!isOwnable(sp) || p.money < price) return false;
+      p.money -= price;
       holdingAt(s, p.position).owner = p.id;
-      log(s, `${p.name} bought ${sp.name} for ₦${sp.price}k. Landlord!`);
+      log(s, `${p.name} bought ${sp.name} for ₦${price}k. Landlord!`);
       s.phase = s.extraRoll ? "roll" : "end";
-      return s;
+      return true;
     }
 
     case "decline": {
-      if (s.phase !== "buy") return prev;
+      if (s.phase !== "buy") return false;
       log(s, `${p.name} passed on ${spaceAt(p.position).name}.`);
       s.phase = s.extraRoll ? "roll" : "end";
-      return s;
+      return true;
     }
 
     case "auction": {
-      if (s.phase !== "buy") return prev;
+      if (s.phase !== "buy") return false;
       const sp = spaceAt(p.position);
-      if (!isOwnable(sp)) return prev;
+      if (!isOwnable(sp)) return false;
+      const price = propertyPriceFor(s, p.position);
       s.auction = { index: p.position, bid: 0, bidder: null, turn: p.id, out: [] };
       s.phase = "auction";
       log(
         s,
-        p.money < sp.price
-          ? `${p.name} no get ₦${sp.price}k for ${sp.name}, so everybody fit bid for am!`
+        p.money < price
+          ? `${p.name} no get ₦${price}k for ${sp.name}, so everybody fit bid for am!`
           : `${p.name} put ${sp.name} up for bidding. Who go carry am?`,
       );
-      return s;
+      return true;
     }
 
     case "bid": {
       const a = s.auction;
-      if (s.phase !== "auction" || !a) return prev;
+      if (s.phase !== "auction" || !a) return false;
       const bidder = playerAt(s, a.turn);
       const amount = Math.floor(action.amount);
-      if (amount < a.bid + BID_STEP || amount < BID_STEP || amount > bidder.money) return prev;
+      if (amount < a.bid + BID_STEP || amount < BID_STEP || amount > bidder.money) return false;
       a.bid = amount;
       a.bidder = bidder.id;
       log(s, `${bidder.name} bid ₦${amount}k for ${spaceAt(a.index).name}.`, bidder.id);
       advanceAuction(s);
-      return s;
+      return true;
     }
 
     case "auctionPass": {
       const a = s.auction;
-      if (s.phase !== "auction" || !a) return prev;
+      if (s.phase !== "auction" || !a) return false;
       const bidder = playerAt(s, a.turn);
       a.out.push(bidder.id);
       log(s, `${bidder.name} dropped out of the bidding.`, bidder.id);
       advanceAuction(s);
-      return s;
+      return true;
     }
 
     case "proposeTrade": {
       const countering = s.phase === "trade" && s.trade;
-      if (!countering && s.phase !== "roll" && s.phase !== "end" && s.phase !== "debt") return prev;
+      if (!countering && s.phase !== "roll" && s.phase !== "end" && s.phase !== "debt")
+        return false;
       const from = countering ? s.trade!.to : s.current;
       const resume = countering ? s.trade!.resume : s.phase;
       const terms = action.terms;
-      if (countering && terms.to !== s.trade!.from) return prev;
-      if (tradeProblem(s, from, terms)) return prev;
+      if (countering && terms.to !== s.trade!.from) return false;
+      if (tradeProblem(s, from, terms)) return false;
       s.trade = {
         from,
         resume,
@@ -621,103 +774,106 @@ export function reduce(prev: GameState, action: Action): GameState {
         `${playerAt(s, from).name} ${countering ? "came back with a counter-offer for" : "offered a deal to"} ${playerAt(s, terms.to).name}: ${describeTrade(s, s.trade)}.`,
         from,
       );
-      return s;
+      return true;
     }
 
     case "acceptTrade": {
       const t = s.trade;
-      if (s.phase !== "trade" || !t || tradeProblem(s, t.from, t)) return prev;
+      if (s.phase !== "trade" || !t || tradeProblem(s, t.from, t)) return false;
       const a = playerAt(s, t.from);
       const b = playerAt(s, t.to);
       for (const i of t.give) holdingAt(s, i).owner = b.id;
       for (const i of t.get) holdingAt(s, i).owner = a.id;
       a.money += t.getCash - t.giveCash;
       b.money += t.giveCash - t.getCash;
+      statsFor(s, a.id).tradesCompleted += 1;
+      statsFor(s, b.id).tradesCompleted += 1;
       log(s, `${b.name} accepted ${a.name}'s deal. Handshake don happen! 🤝`, b.id);
       s.trade = null;
       s.phase = t.resume;
       settleIfPaid(s);
-      return s;
+      return true;
     }
 
     case "rejectTrade": {
       const t = s.trade;
-      if (s.phase !== "trade" || !t) return prev;
+      if (s.phase !== "trade" || !t) return false;
       log(s, `${playerAt(s, t.to).name} said no to ${playerAt(s, t.from).name}'s deal.`, t.to);
       s.trade = null;
       s.phase = t.resume;
-      return s;
+      return true;
     }
 
     case "endTurn": {
-      if (s.phase !== "end") return prev;
+      if (s.phase !== "end") return false;
       nextPlayer(s);
-      return s;
+      return true;
     }
 
     case "payJail": {
-      if (s.phase !== "roll" || !p.inJail || p.money < JAIL_FINE) return prev;
-      p.money -= JAIL_FINE;
+      const fine = jailFineFor(s);
+      if (s.phase !== "roll" || !p.inJail || p.money < fine) return false;
+      p.money -= fine;
       p.inJail = false;
       p.jailTurns = 0;
-      log(s, `${p.name} paid ₦${JAIL_FINE}k bail and left Kirikiri.`);
-      return s;
+      log(s, `${p.name} paid ₦${fine}k bail and left Kirikiri.`);
+      return true;
     }
 
     case "useJailCard": {
-      if (s.phase !== "roll" || !p.inJail || p.jailCards < 1) return prev;
+      if (s.phase !== "roll" || !p.inJail || p.jailCards < 1) return false;
       p.jailCards -= 1;
       p.inJail = false;
       p.jailTurns = 0;
       log(s, `${p.name} used connections to leave Kirikiri free.`);
-      return s;
+      return true;
     }
 
     case "build": {
-      if (!manage || s.phase === "debt" || !canBuild(s, p.id, action.index)) return prev;
+      if (!manage || s.phase === "debt" || !canBuild(s, p.id, action.index)) return false;
       const sp = spaceAt(action.index);
-      if (sp.kind !== "property") return prev;
-      p.money -= sp.houseCost;
+      if (sp.kind !== "property") return false;
+      p.money -= houseCostFor(s, action.index);
       const h = holdingAt(s, action.index);
       h.houses += 1;
       log(s, `${p.name} built ${h.houses === 5 ? "a hotel" : "a house"} on ${sp.name}.`);
-      return s;
+      return true;
     }
 
     case "sell": {
-      if (!manage || !canSell(s, p.id, action.index)) return prev;
+      if (!manage || !canSell(s, p.id, action.index)) return false;
       const sp = spaceAt(action.index);
-      if (sp.kind !== "property") return prev;
+      if (sp.kind !== "property") return false;
       const h = holdingAt(s, action.index);
       h.houses -= 1;
       p.money += sp.houseCost / 2;
       log(s, `${p.name} sold a building on ${sp.name} for ₦${sp.houseCost / 2}k.`);
       settleIfPaid(s);
-      return s;
+      return true;
     }
 
     case "mortgage": {
-      if (!manage || !canMortgage(s, p.id, action.index)) return prev;
+      if (!manage || !canMortgage(s, p.id, action.index)) return false;
       const sp = spaceAt(action.index);
-      if (!isOwnable(sp)) return prev;
+      if (!isOwnable(sp)) return false;
       holdingAt(s, action.index).mortgaged = true;
       p.money += sp.price / 2;
       log(s, `${p.name} mortgaged ${sp.name} for ₦${sp.price / 2}k.`);
       settleIfPaid(s);
-      return s;
+      return true;
     }
 
     case "unmortgage": {
-      if (!manage || s.phase === "debt" || !canUnmortgage(s, p.id, action.index)) return prev;
+      if (!manage || s.phase === "debt" || !canUnmortgage(s, p.id, action.index)) return false;
       const cost = unmortgageCost(action.index);
       holdingAt(s, action.index).mortgaged = false;
       p.money -= cost;
       log(s, `${p.name} paid off the mortgage on ${spaceAt(action.index).name} (₦${cost}k).`);
-      return s;
+      return true;
     }
 
     case "bankrupt": {
-      if (s.phase !== "debt") return prev;
+      if (s.phase !== "debt") return false;
       const creditor = s.debtTo;
       for (const i of ownedBy(s, p.id)) {
         const sp = spaceAt(i);
@@ -726,12 +882,8 @@ export function reduce(prev: GameState, action: Action): GameState {
           p.money += (h.houses * sp.houseCost) / 2;
           h.houses = 0;
         }
-        if (creditor !== null) {
-          h.owner = creditor;
-        } else {
-          h.owner = null;
-          h.mortgaged = false;
-        }
+        h.owner = null;
+        h.mortgaged = false;
       }
       if (creditor !== null) {
         playerAt(s, creditor).money += p.money; // negative balance claws back the unpaid part
@@ -741,20 +893,33 @@ export function reduce(prev: GameState, action: Action): GameState {
       p.jailCards = 0;
       p.bankrupt = true;
       p.inJail = false;
-      log(
-        s,
-        `${p.name} is bankrupt! ${creditor !== null ? `${playerAt(s, creditor).name} takes everything.` : "The bank takes everything."}`,
-      );
+      log(s, `${p.name} is bankrupt! All their properties are now free on the market.`);
       const alive = s.players.filter((x) => !x.bankrupt);
       const last = alive[0];
       if (alive.length === 1 && last) {
         s.winner = last.id;
         s.phase = "gameover";
         log(s, `${last.name} is the Big Man of Lagos! 🎉`, last.id);
-        return s;
+        return true;
       }
       nextPlayer(s);
-      return s;
+      return true;
+    }
+
+    case "revealMission": {
+      const targetId = action.playerId ?? p.id;
+      const ms = s.missions?.[targetId];
+      if (!ms || !ms.completed || ms.revealed) return false;
+      const mission = missionById(ms.missionId);
+      ms.revealed = true;
+      if (mission) {
+        log(
+          s,
+          `${playerAt(s, targetId).name} revealed their completed Secret Mission: ${mission.title}!`,
+          targetId,
+        );
+      }
+      return true;
     }
   }
 }
@@ -809,6 +974,7 @@ function advanceAuction(s: GameState) {
       const winner = playerAt(s, a.bidder);
       winner.money -= a.bid;
       holdingAt(s, a.index).owner = winner.id;
+      statsFor(s, winner.id).auctionsWon += 1;
       log(s, `${winner.name} won ${sp.name} for ₦${a.bid}k. Sold!`, winner.id);
     } else {
       log(s, `Nobody bid for ${sp.name}. E remain for the bank.`, null);

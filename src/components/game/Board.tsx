@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { BOARD, formatNaira, isOwnable, type Space } from "@/game/board";
-import { type GameState } from "@/game/engine";
+import { canBuild, playerAt, propertyPriceFor, taxAmountFor, type GameState } from "@/game/engine";
 import { cn } from "@/lib/utils";
+import { BoardEventOverlay } from "./BoardEventOverlay";
 import { PlayerAvatar } from "./PlayerAvatar";
 import { GROUP_BG, PLAYER_BG, PLAYER_RING } from "./styles";
 
@@ -44,10 +45,22 @@ interface BoardProps {
   state: GameState;
   selected: number | null;
   onSelect: (i: number) => void;
+  viewer?: number | undefined;
   children: ReactNode;
 }
 
-export function Board({ state, selected, onSelect, children }: BoardProps) {
+export function Board({ state, selected, onSelect, viewer, children }: BoardProps) {
+  const activePlayer = playerAt(state, state.current);
+  const humanPlayers = state.players.filter((p) => !p.isCpu);
+  const managerId =
+    viewer !== undefined
+      ? viewer
+      : !activePlayer.isCpu
+        ? activePlayer.id
+        : humanPlayers.length === 1
+          ? humanPlayers[0]?.id
+          : undefined;
+
   return (
     <div className="bg-danfo rounded-2xl p-[1.2%] shadow-board">
       <div
@@ -56,19 +69,29 @@ export function Board({ state, selected, onSelect, children }: BoardProps) {
       >
         {BOARD.map((space, i) => {
           const { row, col, side } = cellOf(i);
+          const owner = state.holdings[i]?.owner ?? null;
+          const ownedByViewer =
+            state.phase !== "gameover" && managerId !== undefined && owner === managerId;
           return (
             <button
               key={i}
               type="button"
               onClick={() => onSelect(i)}
               aria-label={space.name}
+              title={ownedByViewer ? `${space.name} — tap to build or mortgage` : space.name}
               style={{ gridRow: row + 1, gridColumn: col + 1 }}
               className={cn(
-                "relative min-h-0 min-w-0 overflow-hidden bg-board text-board-foreground transition hover:brightness-95 focus-visible:outline-none",
+                "relative min-h-0 min-w-0 cursor-pointer overflow-hidden bg-board text-board-foreground transition hover:brightness-95 focus-visible:outline-none",
                 selected === i && "z-10 ring-2 ring-primary ring-inset",
               )}
             >
-              <Cell space={space} index={i} side={side} state={state} />
+              <Cell
+                space={space}
+                index={i}
+                side={side}
+                state={state}
+                ownedByViewer={ownedByViewer}
+              />
             </button>
           );
         })}
@@ -77,8 +100,11 @@ export function Board({ state, selected, onSelect, children }: BoardProps) {
           {children}
         </div>
 
+        {/* D3 visual overlay highlighting property groups and areas affected by active Lagos events. */}
+        <BoardEventOverlay state={state} />
+
         {/* Tokens glide across the board with CSS transitions. */}
-        <div className="pointer-events-none absolute inset-0">
+        <div className="pointer-events-none absolute inset-0 z-20">
           {state.players.map((p, idx) => {
             if (p.bankrupt) return null;
             const { row, col } = cellOf(p.position);
@@ -119,16 +145,24 @@ function Cell({
   index,
   side,
   state,
+  ownedByViewer,
 }: {
   space: Space;
   index: number;
   side: Side;
   state: GameState;
+  ownedByViewer: boolean;
 }) {
   if (side === "corner") return <Corner space={space} />;
 
   const holding = state.holdings[index];
   const owner = holding?.owner ?? null;
+  const canBuildHere =
+    ownedByViewer &&
+    owner !== null &&
+    owner === state.current &&
+    space.kind === "property" &&
+    canBuild(state, owner, index);
   const horizontal = side === "left" || side === "right";
   const flex = {
     bottom: "flex-col",
@@ -148,7 +182,7 @@ function Cell({
             { bottom: "border-b", top: "border-t", left: "border-l", right: "border-r" }[side],
           )}
         >
-          <Houses count={holding?.houses ?? 0} />
+          <Houses count={holding?.houses ?? 0} canBuildHint={canBuildHere} />
         </div>
       )}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-between gap-[0.2cqw] px-[0.3cqw] py-[0.5cqw] text-center">
@@ -157,9 +191,13 @@ function Cell({
           {space.name}
         </span>
         {isOwnable(space) ? (
-          <span className="text-cell-sm opacity-70">{formatNaira(space.price)}</span>
+          <span className="text-cell-sm opacity-70">
+            {formatNaira(propertyPriceFor(state, index))}
+          </span>
         ) : space.kind === "tax" ? (
-          <span className="text-cell-sm opacity-70">{formatNaira(space.amount)}</span>
+          <span className="text-cell-sm opacity-70">
+            {formatNaira(taxAmountFor(state, space.amount))}
+          </span>
         ) : (
           <span />
         )}
@@ -182,14 +220,23 @@ function Cell({
   );
 }
 
-function Houses({ count }: { count: number }) {
-  if (count === 0) return null;
+function Houses({ count, canBuildHint }: { count: number; canBuildHint?: boolean }) {
+  if (count === 0) {
+    return canBuildHint ? (
+      <span
+        aria-hidden="true"
+        className="text-[clamp(7px,1.2cqw,12px)] font-black leading-none text-white/95 drop-shadow-sm"
+      >
+        +
+      </span>
+    ) : null;
+  }
   if (count === 5)
-    return <span className="size-[1.6cqw] rounded-[2px] border border-board-line bg-destructive" />;
+    return <span className="size-[1.7cqw] rounded-[2px] border border-board-line bg-destructive" />;
   return (
     <>
       {Array.from({ length: count }).map((_, i) => (
-        <span key={i} className="size-[1cqw] rounded-[1px] border border-board-line bg-accent" />
+        <span key={i} className="size-[1.2cqw] rounded-[1px] border border-board-line bg-accent" />
       ))}
     </>
   );

@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { isSupabaseConfigured, supabase } from "./supabase";
 import type { GameState } from "@/game/engine";
+import { redactSecretMissions } from "@/game/missions";
 import { loadSavedAvatar } from "./avatar";
 import { extractChatMessages, type ChatMessage } from "./chat";
 import { MAX_PLAYERS } from "./rooms";
@@ -79,7 +80,7 @@ export function filterOpenLobbies(
 }
 
 /** A room as seen by one of its players; null when it doesn't exist or you haven't joined. */
-export const roomQuery = (code: string) =>
+export const roomQuery = (code: string, userId?: string) =>
   queryOptions({
     queryKey: ["room", code],
     refetchInterval: isSupabaseConfigured() ? 5_000 : 1_500, // fast poll when using local server store
@@ -98,13 +99,18 @@ export const roomQuery = (code: string) =>
       if (error) throw error;
       if (!data) return null;
       const { game_players, ...rest } = data;
+      const sortedPlayers = [...(game_players ?? [])].sort((a, b) => a.seat - b.seat);
+      const rawState = rest.status === "lobby" ? null : (rest.state as unknown as GameState | null);
+      const mySeat = userId ? sortedPlayers.find((p) => p.user_id === userId)?.seat : undefined;
+      const visibleState =
+        rawState && mySeat !== undefined ? redactSecretMissions(rawState, mySeat) : rawState;
       return {
         ...rest,
         code: rest.code ?? code,
         status: rest.status as Room["status"],
-        state: rest.status === "lobby" ? null : (rest.state as unknown as GameState | null),
+        state: visibleState,
         chat: extractChatMessages(rest.state),
-        players: [...(game_players ?? [])].sort((a, b) => a.seat - b.seat),
+        players: sortedPlayers,
       };
     },
   });

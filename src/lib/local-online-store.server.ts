@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import type { GameState } from "@/game/engine";
+import { redactSecretMissions } from "@/game/missions";
 import { extractChatMessages } from "./chat";
 
 interface LocalUser {
@@ -297,14 +298,17 @@ export function getLocalRoomForUser(userId: string, code: string) {
       display_name: p.display_name,
       avatar: p.avatar ?? store.profiles.find((pr) => pr.id === p.user_id)?.avatar ?? null,
     }));
-  if (!players.some((p) => p.user_id === userId)) return null;
+  const me = players.find((p) => p.user_id === userId);
+  if (!me) return null;
+  const visibleState =
+    game.status === "lobby" || !game.state ? null : redactSecretMissions(game.state, me.seat);
   return {
     id: game.id,
     code: game.code ?? code,
     status: game.status as "lobby" | "playing" | "finished",
     host_id: game.host_id,
     max_rounds: game.max_rounds,
-    state: game.status === "lobby" ? null : game.state,
+    state: visibleState,
     chat: extractChatMessages(game.state),
     version: game.version,
     winner_name: game.winner_name,

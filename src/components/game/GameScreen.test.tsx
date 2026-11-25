@@ -1,6 +1,8 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { createGame, type Action, type GameState } from "@/game/engine";
+import { LAGOS_EVENTS } from "@/game/events";
+import { missionById } from "@/game/missions";
 import { GameScreen } from "./GameScreen";
 
 function makeOnlineGame(patch?: Partial<GameState>): GameState {
@@ -237,5 +239,185 @@ describe("GameScreen mobile & online play controls", () => {
     const mobileChatBtn = screen.getByRole("button", { name: "Open table chat (1 unread)" });
     fireEvent.click(mobileChatBtn);
     expect(screen.getByRole("button", { name: "Close chat" })).toBeInTheDocument();
+  });
+
+  it("displays Dynamic Lagos Event pop-up modal, banner, and D3 board highlight overlay", async () => {
+    const roadworks = LAGOS_EVENTS.find((e) => e.id === "badagry_roadworks")!;
+    const game = makeOnlineGame({
+      round: 8,
+      activeEvent: roadworks,
+      eventExpiresAtRound: 8 + roadworks.durationRounds,
+    });
+
+    const { rerender } = render(
+      <GameScreen game={game} setGame={() => {}} onQuit={() => {}} onNewGame={() => {}} />,
+    );
+
+    // Pop-up notification opens automatically for a newly triggered event.
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toBeInTheDocument();
+    expect(screen.getAllByText(roadworks.title).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(roadworks.description)).toBeInTheDocument();
+
+    // D3 board overlay highlights all 22 property spaces in red during Road Construction.
+    const overlay = screen.getByTestId("board-event-overlay");
+    expect(overlay).toHaveAttribute("data-event-id", "badagry_roadworks");
+    expect(overlay).toHaveAttribute("data-event-tone", "alert");
+    expect(overlay).toHaveAttribute("data-event-tint", "#dc2626");
+    expect(overlay).toHaveAttribute("data-affected-count", "22");
+    const tintRects = overlay.querySelectorAll("rect.event-cell-tint");
+    expect(tintRects.length).toBe(22);
+    expect(tintRects[0]).toHaveAttribute("fill", "#dc2626");
+
+    // Closing modal leaves the active event banner visible, and Details re-opens it.
+    fireEvent.click(screen.getByRole("button", { name: "Got it, continue game" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    expect(screen.getByText(/Lagos Event · Disruption/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Details" }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+
+    // Targeted property group event highlights only that group + draws D3 connector links.
+    const lekkiFlood = LAGOS_EVENTS.find((e) => e.id === "lekki_flood")!;
+    rerender(
+      <GameScreen
+        game={makeOnlineGame({
+          round: 16,
+          activeEvent: lekkiFlood,
+          eventExpiresAtRound: 16 + lekkiFlood.durationRounds,
+        })}
+        setGame={() => {}}
+        onQuit={() => {}}
+        onNewGame={() => {}}
+      />,
+    );
+    expect(overlay).toHaveAttribute("data-affected-count", "3");
+    expect(overlay.querySelectorAll("g.event-cell").length).toBe(3);
+    expect(overlay.querySelectorAll("path.event-group-link").length).toBe(2);
+  });
+
+  it("opens easy-to-pick build and mortgage options when clicking an owned property or house", async () => {
+    const base = makeOnlineGame();
+    const holdings = {
+      ...base.holdings,
+      1: { owner: 0, houses: 0, mortgaged: false }, // Makoko (brown)
+      3: { owner: 0, houses: 0, mortgaged: false }, // Ajegunle (brown)
+      5: { owner: 1, houses: 0, mortgaged: false }, // Oshodi Danfo Park (owned by Tunde)
+    };
+    const send = vi.fn(async () => {});
+    const game = makeOnlineGame({ holdings, phase: "end", current: 0 });
+
+    render(
+      <GameScreen
+        game={game}
+        setGame={() => {}}
+        onQuit={() => {}}
+        onNewGame={() => {}}
+        online={{ seat: 0, code: "ABC234", send }}
+      />,
+    );
+
+    // Clicking opponent's property does not open quick-manage dialog.
+    fireEvent.click(screen.getAllByRole("button", { name: "Oshodi Danfo Park" })[0]!);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    // Clicking owned property (Makoko) on the board opens quick-manage dialog with Build & Mortgage options.
+    fireEvent.click(screen.getAllByRole("button", { name: "Makoko" })[0]!);
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toBeInTheDocument();
+
+    const buildBtn = within(dialog).getByRole("button", { name: /Build House 1/ });
+    expect(buildBtn).not.toBeDisabled();
+    fireEvent.click(buildBtn);
+    await waitFor(() => expect(send).toHaveBeenCalledWith({ type: "build", index: 1 }));
+
+    const mortgageBtn = within(dialog).getByRole("button", { name: /Mortgage Property/ });
+    expect(mortgageBtn).not.toBeDisabled();
+    fireEvent.click(mortgageBtn);
+    await waitFor(() => expect(send).toHaveBeenCalledWith({ type: "mortgage", index: 1 }));
+
+    // Switching to sibling property in the same color group updates dialog target.
+    fireEvent.click(within(dialog).getByRole("button", { name: /Ajegunle/ }));
+    expect(within(dialog).getByRole("heading", { name: "Ajegunle" })).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Done" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("displays viewer's secret mission progress, triggers private completion dialog, and reveals missions", async () => {
+    const send = vi.fn(async () => {});
+    const base = makeOnlineGame();
+    const myMissionId = base.missions![0]!.missionId;
+    const myMission = missionById(myMissionId)!;
+    const oppMissionId = base.missions![1]!.missionId;
+    const oppMission = missionById(oppMissionId)!;
+
+    const incompleteGame: GameState = {
+      ...base,
+      missions: {
+        0: { missionId: myMissionId, completed: false, revealed: false },
+        1: { missionId: "__hidden__", completed: false, revealed: false },
+      },
+    };
+
+    const { rerender } = render(
+      <GameScreen
+        game={incompleteGame}
+        setGame={() => {}}
+        onQuit={() => {}}
+        onNewGame={() => {}}
+        online={{ seat: 0, code: "ABC234", send }}
+      />,
+    );
+
+    const missionRegion = screen.getByRole("region", { name: "Secret Mission" });
+    expect(within(missionRegion).getByText(myMission.title)).toBeInTheDocument();
+    expect(within(missionRegion).queryByText(oppMission.title)).not.toBeInTheDocument();
+
+    // Completing viewer's mission triggers private completion dialog and Reveal to Everyone action.
+    const completedGame: GameState = {
+      ...incompleteGame,
+      missions: {
+        0: { missionId: myMissionId, completed: true, revealed: false, completedTurn: base.turn },
+        1: { missionId: "__hidden__", completed: false, revealed: false },
+      },
+    };
+
+    rerender(
+      <GameScreen
+        game={completedGame}
+        setGame={() => {}}
+        onQuit={() => {}}
+        onNewGame={() => {}}
+        online={{ seat: 0, code: "ABC234", send }}
+      />,
+    );
+
+    const completeDialog = await screen.findByRole("dialog");
+    expect(within(completeDialog).getByText("Private Mission Complete")).toBeInTheDocument();
+    fireEvent.click(within(completeDialog).getByRole("button", { name: /Reveal to Everyone/ }));
+    await waitFor(() => expect(send).toHaveBeenCalledWith({ type: "revealMission", playerId: 0 }));
+  });
+
+  it("reveals all players' secret missions in the gameover summary modal", () => {
+    const base = makeOnlineGame();
+    const m0 = missionById(base.missions![0]!.missionId)!;
+    const m1 = missionById(base.missions![1]!.missionId)!;
+    const ended: GameState = {
+      ...base,
+      phase: "gameover",
+      winner: 0,
+      missions: {
+        0: { missionId: m0.id, completed: true, revealed: true },
+        1: { missionId: m1.id, completed: false, revealed: false },
+      },
+    };
+
+    render(<GameScreen game={ended} setGame={() => {}} onQuit={() => {}} onNewGame={() => {}} />);
+
+    expect(screen.getByText("Secret Missions Revealed")).toBeInTheDocument();
+    expect(screen.getAllByText(new RegExp(m0.title)).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(new RegExp(m1.title)).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("Not completed")).toBeInTheDocument();
   });
 });

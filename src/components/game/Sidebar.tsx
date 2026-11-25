@@ -1,9 +1,13 @@
 import { ArrowLeftRight, Home, Hotel, Landmark, Lock, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GROUP_LABEL, formatNaira, isOwnable, spaceAt } from "@/game/board";
+import { describeEventEffect, isSpaceAffectedByEvent } from "@/game/events";
 import {
   holdingAt,
+  houseCostFor,
   playerAt,
+  propertyPriceFor,
+  taxAmountFor,
   canBuild,
   canMortgage,
   canSell,
@@ -151,6 +155,10 @@ export function SpaceDetails({
     state.phase !== "auction" &&
     state.phase !== "trade";
   const owner = h?.owner != null ? playerAt(state, h.owner) : null;
+  const activeEvent = state.activeEvent ?? null;
+  const eventAffectsSpace = isSpaceAffectedByEvent(sp, activeEvent);
+  const currentPrice = isOwnable(sp) ? propertyPriceFor(state, index) : 0;
+  const currentHouseCost = sp.kind === "property" ? houseCostFor(state, index) : 0;
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-board text-board-foreground shadow-pop">
@@ -168,8 +176,22 @@ export function SpaceDetails({
         <h3 className="font-display text-lg font-bold uppercase">{sp.name}</h3>
       </div>
       <div className="space-y-3 p-4 text-sm">
+        {eventAffectsSpace && activeEvent && (
+          <div className="flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/15 px-3 py-1.5 text-xs font-medium text-board-foreground">
+            <span>{activeEvent.icon}</span>
+            <span>
+              <strong>{activeEvent.title}:</strong> {describeEventEffect(activeEvent)}
+            </span>
+          </div>
+        )}
         {"blurb" in sp && <p className="text-center italic opacity-75">{sp.blurb}</p>}
-        {"sub" in sp && <p className="text-center opacity-80">{sp.sub}</p>}
+        {"sub" in sp && (
+          <p className="text-center opacity-80">
+            {sp.kind === "tax" && taxAmountFor(state, sp.amount) !== sp.amount
+              ? `Pay ${formatNaira(taxAmountFor(state, sp.amount))} (base ${formatNaira(sp.amount)})`
+              : sp.sub}
+          </p>
+        )}
         {sp.kind === "card" && (
           <p className="text-center opacity-80">
             {sp.deck === "wahala"
@@ -197,7 +219,14 @@ export function SpaceDetails({
               ))}
               <tr className="border-t border-board-line/20">
                 <td className="pt-1.5 opacity-75">Building cost</td>
-                <td className="pt-1.5 text-right">{formatNaira(sp.houseCost)}</td>
+                <td className="pt-1.5 text-right">
+                  {formatNaira(currentHouseCost)}
+                  {currentHouseCost !== sp.houseCost && (
+                    <span className="ml-1 text-xs line-through opacity-60">
+                      {formatNaira(sp.houseCost)}
+                    </span>
+                  )}
+                </td>
               </tr>
             </tbody>
           </table>
@@ -216,7 +245,10 @@ export function SpaceDetails({
         {isOwnable(sp) && (
           <div className="flex items-center justify-between rounded-lg bg-board-line/10 px-3 py-2">
             <span className="flex items-center gap-1.5 opacity-75">
-              <Landmark className="size-4" /> {formatNaira(sp.price)}
+              <Landmark className="size-4" /> {formatNaira(currentPrice)}
+              {currentPrice !== sp.price && (
+                <span className="text-xs line-through opacity-60">{formatNaira(sp.price)}</span>
+              )}
             </span>
             <span className="flex items-center gap-1.5 font-semibold">
               {owner ? (
@@ -242,7 +274,7 @@ export function SpaceDetails({
                   disabled={!!busy || !canBuild(state, me.id, index) || state.phase === "debt"}
                   onClick={() => dispatch({ type: "build", index })}
                 >
-                  {h.houses >= 4 ? <Hotel /> : <Home />} Build {formatNaira(sp.houseCost)}
+                  {h.houses >= 4 ? <Hotel /> : <Home />} Build {formatNaira(currentHouseCost)}
                 </Button>
                 <Button
                   size="sm"
