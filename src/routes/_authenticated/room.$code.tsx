@@ -64,7 +64,7 @@ export const Route = createFileRoute("/_authenticated/room/$code")({
   loader: ({ context, params }) => {
     void context.queryClient.prefetchQuery(myNameQuery(context.user.id));
     void context.queryClient.prefetchQuery(myAvatarQuery(context.user.id));
-    void context.queryClient.prefetchQuery(roomQuery(params.code, context.user.id));
+    void context.queryClient.prefetchQuery(roomQuery(params.code));
   },
   component: RoomPage,
 });
@@ -201,7 +201,7 @@ function RoomPage() {
   const { user } = Route.useRouteContext();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const roomState = useQuery(roomQuery(code, user.id));
+  const roomState = useQuery(roomQuery(code));
   const room = roomState.data ?? null;
   const me = room?.players.find((p) => p.user_id === user.id);
   useLiveRoom(room, code);

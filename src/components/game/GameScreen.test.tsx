@@ -2,7 +2,6 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { describe, expect, it, vi } from "vitest";
 import { createGame, type Action, type GameState } from "@/game/engine";
 import { LAGOS_EVENTS } from "@/game/events";
-import { missionById } from "@/game/missions";
 import { GameScreen } from "./GameScreen";
 
 function makeOnlineGame(patch?: Partial<GameState>): GameState {
@@ -342,82 +341,5 @@ describe("GameScreen mobile & online play controls", () => {
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Done" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-  });
-
-  it("displays viewer's secret mission progress, triggers private completion dialog, and reveals missions", async () => {
-    const send = vi.fn(async () => {});
-    const base = makeOnlineGame();
-    const myMissionId = base.missions![0]!.missionId;
-    const myMission = missionById(myMissionId)!;
-    const oppMissionId = base.missions![1]!.missionId;
-    const oppMission = missionById(oppMissionId)!;
-
-    const incompleteGame: GameState = {
-      ...base,
-      missions: {
-        0: { missionId: myMissionId, completed: false, revealed: false },
-        1: { missionId: "__hidden__", completed: false, revealed: false },
-      },
-    };
-
-    const { rerender } = render(
-      <GameScreen
-        game={incompleteGame}
-        setGame={() => {}}
-        onQuit={() => {}}
-        onNewGame={() => {}}
-        online={{ seat: 0, code: "ABC234", send }}
-      />,
-    );
-
-    const missionRegion = screen.getByRole("region", { name: "Secret Mission" });
-    expect(within(missionRegion).getByText(myMission.title)).toBeInTheDocument();
-    expect(within(missionRegion).queryByText(oppMission.title)).not.toBeInTheDocument();
-
-    // Completing viewer's mission triggers private completion dialog and Reveal to Everyone action.
-    const completedGame: GameState = {
-      ...incompleteGame,
-      missions: {
-        0: { missionId: myMissionId, completed: true, revealed: false, completedTurn: base.turn },
-        1: { missionId: "__hidden__", completed: false, revealed: false },
-      },
-    };
-
-    rerender(
-      <GameScreen
-        game={completedGame}
-        setGame={() => {}}
-        onQuit={() => {}}
-        onNewGame={() => {}}
-        online={{ seat: 0, code: "ABC234", send }}
-      />,
-    );
-
-    const completeDialog = await screen.findByRole("dialog");
-    expect(within(completeDialog).getByText("Private Mission Complete")).toBeInTheDocument();
-    fireEvent.click(within(completeDialog).getByRole("button", { name: /Reveal to Everyone/ }));
-    await waitFor(() => expect(send).toHaveBeenCalledWith({ type: "revealMission", playerId: 0 }));
-  });
-
-  it("reveals all players' secret missions in the gameover summary modal", () => {
-    const base = makeOnlineGame();
-    const m0 = missionById(base.missions![0]!.missionId)!;
-    const m1 = missionById(base.missions![1]!.missionId)!;
-    const ended: GameState = {
-      ...base,
-      phase: "gameover",
-      winner: 0,
-      missions: {
-        0: { missionId: m0.id, completed: true, revealed: true },
-        1: { missionId: m1.id, completed: false, revealed: false },
-      },
-    };
-
-    render(<GameScreen game={ended} setGame={() => {}} onQuit={() => {}} onNewGame={() => {}} />);
-
-    expect(screen.getByText("Secret Missions Revealed")).toBeInTheDocument();
-    expect(screen.getAllByText(new RegExp(m0.title)).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText(new RegExp(m1.title)).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("Not completed")).toBeInTheDocument();
   });
 });

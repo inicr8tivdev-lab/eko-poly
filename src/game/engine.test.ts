@@ -79,59 +79,19 @@ describe("Ekopoly rules", () => {
     expect(playerAt(next, 0).money).toBe(1450);
   });
 
-  it("bankrupt player's properties become free on the market so others can buy or auction them", () => {
-    const s = createGame(
-      [
-        { name: "A", isCpu: false },
-        { name: "B", isCpu: false },
-        { name: "C", isCpu: false },
-      ],
-      () => 0.5,
-    );
+  it("bankrupt player's property goes to the creditor and the last player wins", () => {
+    const s = newGame();
     holdingAt(s, 39).owner = 1;
     holdingAt(s, 39).houses = 5; // Banana Island hotel: ₦2M rent
     holdingAt(s, 37).owner = 1;
     playerAt(s, 0).position = 35;
     playerAt(s, 0).money = 100;
     holdingAt(s, 1).owner = 0;
-    holdingAt(s, 3).owner = 0;
-    holdingAt(s, 3).houses = 2;
-    holdingAt(s, 5).owner = 0;
-    holdingAt(s, 5).mortgaged = true;
-
     let next = reduce(s, { type: "roll", dice: [1, 3] });
     expect(next.phase).toBe("debt");
     next = reduce(next, { type: "bankrupt" });
     expect(playerAt(next, 0).bankrupt).toBe(true);
-    expect(holdingAt(next, 1)).toEqual({ owner: null, houses: 0, mortgaged: false });
-    expect(holdingAt(next, 3)).toEqual({ owner: null, houses: 0, mortgaged: false });
-    expect(holdingAt(next, 5)).toEqual({ owner: null, houses: 0, mortgaged: false });
-    expect(next.phase).toBe("roll");
-    expect(next.current).toBe(1);
-
-    // Player B lands on freed Makoko (index 1) and can buy or auction it cleanly.
-    playerAt(next, 1).position = 0;
-    next = reduce(next, { type: "roll", dice: [1, 0] as [number, number] });
-    expect(next.phase).toBe("buy");
-    const bought = reduce(next, { type: "buy" });
-    expect(holdingAt(bought, 1).owner).toBe(1);
-    const auctioned = reduce(next, { type: "auction" });
-    expect(auctioned.phase).toBe("auction");
-    expect(auctioned.auction?.index).toBe(1);
-  });
-
-  it("last remaining active player wins when penultimate player declares bankruptcy", () => {
-    const s = newGame();
-    holdingAt(s, 39).owner = 1;
-    holdingAt(s, 39).houses = 5;
-    holdingAt(s, 37).owner = 1;
-    playerAt(s, 0).position = 35;
-    playerAt(s, 0).money = 100;
-    holdingAt(s, 1).owner = 0;
-    let next = reduce(s, { type: "roll", dice: [1, 3] });
-    next = reduce(next, { type: "bankrupt" });
-    expect(playerAt(next, 0).bankrupt).toBe(true);
-    expect(holdingAt(next, 1).owner).toBe(null);
+    expect(holdingAt(next, 1).owner).toBe(1);
     expect(next.phase).toBe("gameover");
     expect(next.winner).toBe(1);
   });

@@ -3,7 +3,6 @@ import { useCallback, useEffect, useState } from "react";
 import { GameScreen } from "@/components/game/GameScreen";
 import { Setup } from "@/components/game/Setup";
 import { createGame, type GameState } from "@/game/engine";
-import { safeClearSavedGame, safeLoadSavedGame, safeSaveGame } from "@/lib/save-game";
 
 const SAVE_KEY = "ekopoly-save-v2";
 
@@ -35,11 +34,19 @@ function Index() {
   const [saved, setSaved] = useState<GameState | null>(null);
 
   useEffect(() => {
-    setSaved(safeLoadSavedGame(SAVE_KEY));
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as GameState;
+        if (parsed.phase !== "gameover") setSaved(parsed);
+      }
+    } catch {
+      localStorage.removeItem(SAVE_KEY);
+    }
   }, []);
 
   useEffect(() => {
-    if (game) safeSaveGame(SAVE_KEY, game);
+    if (game) localStorage.setItem(SAVE_KEY, JSON.stringify(game));
   }, [game]);
 
   const setGame = useCallback((fn: (g: GameState) => GameState) => {
@@ -55,9 +62,7 @@ function Index() {
     return (
       <Setup
         saved={saved}
-        onResume={() => {
-          if (saved) setGameState(saved);
-        }}
+        onResume={() => setGameState(saved)}
         onStart={(players, rounds) => setGameState(createGame(players, Math.random, rounds))}
       />
     );
@@ -69,7 +74,7 @@ function Index() {
       setGame={setGame}
       onQuit={backToSetup}
       onNewGame={() => {
-        safeClearSavedGame(SAVE_KEY);
+        localStorage.removeItem(SAVE_KEY);
         setSaved(null);
         setGameState(null);
       }}

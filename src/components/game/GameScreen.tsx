@@ -23,7 +23,6 @@ import {
   type Action,
   type GameState,
 } from "@/game/engine";
-import { missionById } from "@/game/missions";
 import {
   clearPendingSounds,
   detectGameSounds,
@@ -44,7 +43,6 @@ import { OnlineChat, type OnlineChatConfig } from "./OnlineChat";
 import { TradeDialog, type TradeDraft } from "./TradeDialog";
 import { LagosEventAlert } from "./LagosEventAlert";
 import { PropertyActionDialog } from "./PropertyActionDialog";
-import { SecretMissionPanel } from "./SecretMissionPanel";
 
 /** Online play: moves go to the server instead of being applied on this device. */
 export interface OnlinePlay {
@@ -222,10 +220,10 @@ export function GameScreen({
       playSoundSequence(cues);
       if (cues.includes("jail")) {
         setBoardEffect("jail");
-        later(() => setBoardEffect(null), 600);
+        setTimeout(() => setBoardEffect(null), 600);
       } else if (cues.includes("tax")) {
         setBoardEffect("tax");
-        later(() => setBoardEffect(null), 600);
+        setTimeout(() => setBoardEffect(null), 600);
       }
     }
   }, [game]);
@@ -432,12 +430,6 @@ export function GameScreen({
                 : undefined
             }
           />
-          <SecretMissionPanel
-            state={game}
-            viewer={viewer}
-            busy={rolling || sending}
-            onReveal={(playerId) => dispatch({ type: "revealMission", playerId })}
-          />
           {online?.chat && (
             <div className="hidden lg:block">
               <OnlineChat
@@ -504,7 +496,7 @@ export function GameScreen({
 
       {winner && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-6 backdrop-blur">
-          <div className="animate-card-in max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-border bg-card text-center shadow-board">
+          <div className="animate-card-in w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card text-center shadow-board">
             <div className="h-3 bg-danfo" />
             <div className="p-8">
               <Trophy className="mx-auto size-12 text-primary" />
@@ -519,50 +511,6 @@ export function GameScreen({
                 Finished with {formatNaira(netWorth(game, winner.id))} in cash and property. Owambe
                 for everybody!
               </p>
-              {game.missions && (
-                <div className="mt-5 rounded-xl border border-border bg-secondary/40 p-3.5 text-left">
-                  <p className="font-display text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                    Secret Missions Revealed
-                  </p>
-                  <ul className="mt-2 space-y-2">
-                    {game.players.map((pl) => {
-                      const ms = game.missions?.[pl.id];
-                      const m =
-                        ms && ms.missionId !== "__hidden__" ? missionById(ms.missionId) : undefined;
-                      if (!m || !ms) return null;
-                      return (
-                        <li key={pl.id} className="flex items-center justify-between gap-2 text-xs">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <PlayerAvatar
-                              player={pl}
-                              seatIndex={pl.id}
-                              className="size-6 shrink-0 text-xs"
-                            />
-                            <div className="min-w-0">
-                              <p className="truncate font-semibold">
-                                {pl.name}: {m.icon} {m.title}
-                              </p>
-                              <p className="truncate text-[11px] text-muted-foreground">
-                                {m.objective}
-                              </p>
-                            </div>
-                          </div>
-                          <span
-                            className={cn(
-                              "shrink-0 font-semibold",
-                              ms.completed
-                                ? "text-emerald-600 dark:text-emerald-400"
-                                : "text-muted-foreground",
-                            )}
-                          >
-                            {ms.completed ? "Completed" : "Not completed"}
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              )}
               <Button variant="danfo" size="xl" className="mt-6 w-full" onClick={onNewGame}>
                 {online ? "Back to rooms" : "Play again"}
               </Button>
