@@ -29,10 +29,14 @@ function getAudioContext(): AudioContext | null {
     window.AudioContext ??
     (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!Ctor) return null;
-  if (!audioCtx || audioCtx.state === "closed") {
-    audioCtx = new Ctor();
+  try {
+    if (!audioCtx || audioCtx.state === "closed") {
+      audioCtx = new Ctor();
+    }
+    return audioCtx;
+  } catch {
+    return null;
   }
-  return audioCtx;
 }
 
 export function unlockAudio(): void {

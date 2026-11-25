@@ -13,6 +13,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { initStartupMusic } from "@/lib/music";
+import { safeClearSavedGame } from "@/lib/save-game";
 import { supabase } from "@/lib/supabase";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -57,7 +58,8 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => {
-              router.invalidate();
+              safeClearSavedGame("ekopoly-save-v2");
+              void router.invalidate();
               reset();
             }}
             className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
@@ -136,15 +138,26 @@ function RootComponent() {
   const router = useRouter();
 
   useEffect(() => {
-    const cleanupMusic = initStartupMusic();
-    const { data } = supabase.auth.onAuthStateChange((event) => {
-      if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
-      void router.invalidate();
-      if (event !== "SIGNED_OUT") void queryClient.invalidateQueries();
-    });
+    let cleanupMusic: (() => void) | undefined;
+    let unsubscribeAuth: (() => void) | undefined;
+    try {
+      cleanupMusic = initStartupMusic();
+    } catch {
+      // ignore startup audio initialization failures in restricted browsers
+    }
+    try {
+      const { data } = supabase.auth.onAuthStateChange((event) => {
+        if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
+        void router.invalidate();
+        if (event !== "SIGNED_OUT") void queryClient.invalidateQueries();
+      });
+      unsubscribeAuth = () => data.subscription.unsubscribe();
+    } catch {
+      // ignore auth listener setup errors
+    }
     return () => {
-      cleanupMusic();
-      data.subscription.unsubscribe();
+      cleanupMusic?.();
+      unsubscribeAuth?.();
     };
   }, [router, queryClient]);
 

@@ -5,6 +5,7 @@ import { redactSecretMissions } from "@/game/missions";
 import { loadSavedAvatar } from "./avatar";
 import { extractChatMessages, type ChatMessage } from "./chat";
 import { MAX_PLAYERS } from "./rooms";
+import { sanitizeGameState } from "./save-game";
 import {
   getMyProfileAvatar,
   getMyProfileName,
@@ -100,7 +101,7 @@ export const roomQuery = (code: string, userId?: string) =>
       if (!data) return null;
       const { game_players, ...rest } = data;
       const sortedPlayers = [...(game_players ?? [])].sort((a, b) => a.seat - b.seat);
-      const rawState = rest.status === "lobby" ? null : (rest.state as unknown as GameState | null);
+      const rawState = rest.status === "lobby" ? null : sanitizeGameState(rest.state);
       const mySeat = userId ? sortedPlayers.find((p) => p.user_id === userId)?.seat : undefined;
       const visibleState =
         rawState && mySeat !== undefined ? redactSecretMissions(rawState, mySeat) : rawState;

@@ -222,10 +222,10 @@ export function GameScreen({
       playSoundSequence(cues);
       if (cues.includes("jail")) {
         setBoardEffect("jail");
-        setTimeout(() => setBoardEffect(null), 600);
+        later(() => setBoardEffect(null), 600);
       } else if (cues.includes("tax")) {
         setBoardEffect("tax");
-        setTimeout(() => setBoardEffect(null), 600);
+        later(() => setBoardEffect(null), 600);
       }
     }
   }, [game]);

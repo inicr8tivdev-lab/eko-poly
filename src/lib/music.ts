@@ -41,10 +41,15 @@ export function isMusicEnabled(): boolean {
 function getOrCreateAudio(): HTMLAudioElement | null {
   if (typeof window === "undefined" || typeof Audio === "undefined") return null;
   if (!audioEl) {
-    audioEl = new Audio(MUSIC_TRACK_SRC);
-    audioEl.loop = true;
-    audioEl.preload = "auto";
-    audioEl.volume = MUSIC_VOLUME;
+    try {
+      const el = new Audio(MUSIC_TRACK_SRC);
+      el.loop = true;
+      el.preload = "auto";
+      el.volume = MUSIC_VOLUME;
+      audioEl = el;
+    } catch {
+      return null;
+    }
   }
   return audioEl;
 }
