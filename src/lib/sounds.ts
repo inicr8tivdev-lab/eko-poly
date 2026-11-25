@@ -189,9 +189,7 @@ export function playSound(effect: SoundEffect): void {
     case "owambe": {
       try {
         if (typeof window !== "undefined" && typeof Audio !== "undefined") {
-          const audio = new Audio(
-            "/assets/aistudio/Lets-have-it-Comedy-sound-effect_f089d645.mp3",
-          );
+          const audio = new Audio("/assets/aistudio/Lets-have-it-Comedy-sound-effect_f089d645.mp3");
           audio.volume = 0.85;
           void audio.play().catch(() => {});
         }

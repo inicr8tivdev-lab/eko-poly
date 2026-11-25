@@ -95,6 +95,7 @@ export function GameScreen({
     (game.phase === "roll" || game.phase === "end" || game.phase === "debt");
   const [selected, setSelected] = useState<number>(playerAt(game, game.current).position);
   const [chatOpen, setChatOpen] = useState(false);
+  const [boardEffect, setBoardEffect] = useState<"jail" | "tax" | null>(null);
   const rawChatMessages = online?.chat?.messages;
   const chatMessages = useMemo(() => rawChatMessages ?? [], [rawChatMessages]);
   const [seenChatCount, setSeenChatCount] = useState(chatMessages.length);
@@ -188,7 +189,16 @@ export function GameScreen({
     const includeRemoteRoll = !localRollSoundRef.current;
     localRollSoundRef.current = false;
     const cues = detectGameSounds(prev, game, { includeRemoteRoll });
-    if (cues.length > 0) playSoundSequence(cues);
+    if (cues.length > 0) {
+      playSoundSequence(cues);
+      if (cues.includes("jail")) {
+        setBoardEffect("jail");
+        setTimeout(() => setBoardEffect(null), 600);
+      } else if (cues.includes("tax")) {
+        setBoardEffect("tax");
+        setTimeout(() => setBoardEffect(null), 600);
+      }
+    }
   }, [game]);
 
   // Follow the active player's token.
@@ -348,7 +358,20 @@ export function GameScreen({
           game.phase !== "gameover" && "pb-44 lg:pb-6",
         )}
       >
-        <div className="@container/game mx-auto w-full max-w-[min(100%,calc(100dvh-7rem))]">
+        <div
+          className={cn(
+            "@container/game relative mx-auto w-full max-w-[min(100%,calc(100dvh-7rem))]",
+            boardEffect && "animate-screen-shake",
+          )}
+        >
+          {boardEffect && (
+            <div
+              className={cn(
+                "pointer-events-none absolute inset-0 z-50 rounded-3xl transition-opacity duration-300 animate-pulse",
+                boardEffect === "jail" ? "bg-destructive/25" : "bg-primary/25",
+              )}
+            />
+          )}
           <Board state={game} selected={selected} onSelect={setSelected}>
             <CenterPanel {...panelProps} />
           </Board>
