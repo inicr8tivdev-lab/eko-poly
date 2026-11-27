@@ -43,6 +43,7 @@ import { OnlineChat, type OnlineChatConfig } from "./OnlineChat";
 import { TradeDialog, type TradeDraft } from "./TradeDialog";
 import { LagosEventAlert } from "./LagosEventAlert";
 import { PropertyActionDialog } from "./PropertyActionDialog";
+import { TurnStatusBar } from "./TurnStatusBar";
 
 /** Online play: moves go to the server instead of being applied on this device. */
 export interface OnlinePlay {
@@ -83,12 +84,7 @@ export function GameScreen({
   const prevGameRef = useRef<GameState>(game);
   const [draft, setDraft] = useState<TradeDraft | null>(null);
   const me = playerAt(game, game.current);
-  const activeActor = playerAt(game, actorOf(game));
   const viewer = online?.seat;
-  const isMyTurn =
-    game.phase !== "gameover" &&
-    !activeActor.isCpu &&
-    (viewer === undefined || viewer === activeActor.id);
   const canTrade =
     !rolling &&
     !sending &&
@@ -285,23 +281,10 @@ export function GameScreen({
               {online.code}
             </span>
           )}
-          <span className="hidden text-sm text-muted-foreground sm:inline">
+          <span className="text-xs text-muted-foreground sm:text-sm">
             Round {game.round}
             {game.maxRounds !== null && ` of ${game.maxRounds}`}
           </span>
-          {game.phase !== "gameover" && (
-            <span
-              className={cn(
-                "inline-flex min-w-0 items-center gap-1.5 truncate rounded-full px-2 py-0.5 text-xs font-medium sm:hidden",
-                isMyTurn ? "bg-primary/15 text-primary" : "bg-secondary text-muted-foreground",
-              )}
-            >
-              <span className="truncate">
-                {online && viewer === activeActor.id ? "Your turn" : `${activeActor.name}'s turn`}
-              </span>
-              <span className="shrink-0 opacity-75">· R{game.round}</span>
-            </span>
-          )}
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {online?.chat && (
@@ -379,6 +362,8 @@ export function GameScreen({
         </div>
       </header>
 
+      <TurnStatusBar game={game} viewer={viewer} />
+
       {game.activeEvent && game.phase !== "gameover" && (
         <div className="mx-auto max-w-[1400px] px-3 pt-3 sm:px-6 sm:pt-4">
           <LagosEventAlert
@@ -397,7 +382,7 @@ export function GameScreen({
       >
         <div
           className={cn(
-            "@container/game relative mx-auto w-full max-w-[min(100%,calc(100dvh-7rem))]",
+            "@container/game relative mx-auto w-full max-w-[min(100%,calc(100dvh-10rem))]",
             boardEffect && "animate-screen-shake",
           )}
         >

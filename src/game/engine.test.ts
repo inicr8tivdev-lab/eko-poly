@@ -79,7 +79,7 @@ describe("Ekopoly rules", () => {
     expect(playerAt(next, 0).money).toBe(1450);
   });
 
-  it("bankrupt player's property goes to the creditor and the last player wins", () => {
+  it("bankrupt player's properties return to the bank and the last player wins", () => {
     const s = newGame();
     holdingAt(s, 39).owner = 1;
     holdingAt(s, 39).houses = 5; // Banana Island hotel: ₦2M rent
@@ -91,9 +91,53 @@ describe("Ekopoly rules", () => {
     expect(next.phase).toBe("debt");
     next = reduce(next, { type: "bankrupt" });
     expect(playerAt(next, 0).bankrupt).toBe(true);
-    expect(holdingAt(next, 1).owner).toBe(1);
+    expect(holdingAt(next, 1).owner).toBeNull();
+    expect(holdingAt(next, 1).houses).toBe(0);
+    expect(holdingAt(next, 1).mortgaged).toBe(false);
     expect(next.phase).toBe("gameover");
     expect(next.winner).toBe(1);
+  });
+
+  it("clears buildings and mortgages on bankrupt properties so other players can buy or auction them", () => {
+    const s = createGame(
+      [
+        { name: "A", isCpu: false },
+        { name: "B", isCpu: false },
+        { name: "C", isCpu: false },
+      ],
+      () => 0.5,
+    );
+    // Player A owns brown set with houses and a mortgaged utility, then lands on B's Banana Island hotel.
+    holdingAt(s, 1).owner = 0;
+    holdingAt(s, 1).houses = 3;
+    holdingAt(s, 3).owner = 0;
+    holdingAt(s, 3).houses = 2;
+    holdingAt(s, 12).owner = 0;
+    holdingAt(s, 12).mortgaged = true;
+    holdingAt(s, 39).owner = 1;
+    holdingAt(s, 39).houses = 5;
+    holdingAt(s, 37).owner = 1;
+    playerAt(s, 0).position = 35;
+    playerAt(s, 0).money = 100;
+
+    let next = reduce(s, { type: "roll", dice: [1, 3] }); // A lands on 39 -> debt to B
+    expect(next.phase).toBe("debt");
+    next = reduce(next, { type: "bankrupt" });
+
+    expect(playerAt(next, 0).bankrupt).toBe(true);
+    for (const idx of [1, 3, 12]) {
+      expect(holdingAt(next, idx).owner).toBeNull();
+      expect(holdingAt(next, idx).houses).toBe(0);
+      expect(holdingAt(next, idx).mortgaged).toBe(false);
+    }
+
+    // Player B is next and lands on Makoko (index 1) -> available to buy or auction.
+    expect(next.current).toBe(1);
+    playerAt(next, 1).position = 0;
+    next = reduce(next, { type: "roll", dice: [0, 1] });
+    expect(next.phase).toBe("buy");
+    next = reduce(next, { type: "buy" });
+    expect(holdingAt(next, 1).owner).toBe(1);
   });
 });
 

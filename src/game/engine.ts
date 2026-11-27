@@ -823,12 +823,8 @@ export function reduce(prev: GameState, action: Action): GameState {
           p.money += (h.houses * sp.houseCost) / 2;
           h.houses = 0;
         }
-        if (creditor !== null) {
-          h.owner = creditor;
-        } else {
-          h.owner = null;
-          h.mortgaged = false;
-        }
+        h.owner = null;
+        h.mortgaged = false;
       }
       if (creditor !== null) {
         playerAt(s, creditor).money += p.money; // negative balance claws back the unpaid part
@@ -838,10 +834,7 @@ export function reduce(prev: GameState, action: Action): GameState {
       p.jailCards = 0;
       p.bankrupt = true;
       p.inJail = false;
-      log(
-        s,
-        `${p.name} is bankrupt! ${creditor !== null ? `${playerAt(s, creditor).name} takes everything.` : "The bank takes everything."}`,
-      );
+      log(s, `${p.name} is bankrupt! All properties return to the bank.`);
       const alive = s.players.filter((x) => !x.bankrupt);
       const last = alive[0];
       if (alive.length === 1 && last) {

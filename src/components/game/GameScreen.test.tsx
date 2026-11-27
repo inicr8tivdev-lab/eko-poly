@@ -342,4 +342,33 @@ describe("GameScreen mobile & online play controls", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Done" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
+
+  it("displays a clear TurnStatusBar showing whose turn it currently is and turn order", () => {
+    const game = makeOnlineGame({ current: 1, phase: "roll" });
+    const { rerender } = render(
+      <GameScreen game={game} setGame={() => {}} onQuit={() => {}} onNewGame={() => {}} />,
+    );
+
+    const statusBar = screen.getByTestId("turn-status-bar");
+    expect(within(statusBar).getByText("Tunde's turn")).toBeInTheDocument();
+    expect(within(statusBar).getByText("Roll dice")).toBeInTheDocument();
+    const orderList = within(statusBar).getByRole("list", { name: "Turn order" });
+    expect(within(orderList).getByText("Tunde").closest("li")).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
+
+    // Online viewer seeing their own turn sees "Your turn · Ada"
+    rerender(
+      <GameScreen
+        game={makeOnlineGame({ current: 0, phase: "buy" })}
+        setGame={() => {}}
+        onQuit={() => {}}
+        onNewGame={() => {}}
+        online={{ seat: 0, code: "ABC234", send: async () => {} }}
+      />,
+    );
+    expect(within(statusBar).getByText("Your turn · Ada")).toBeInTheDocument();
+    expect(within(statusBar).getByText("Buy or auction space")).toBeInTheDocument();
+  });
 });
