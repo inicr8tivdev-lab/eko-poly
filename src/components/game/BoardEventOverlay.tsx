@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
-import * as d3 from "d3";
+import { curveBasis, line, select } from "d3";
 import { BOARD, type Space } from "@/game/board";
 import { getEventVisualTheme, isSpaceAffectedByEvent } from "@/game/events";
 import type { GameState } from "@/game/engine";
@@ -110,8 +110,7 @@ export function BoardEventOverlay({ state }: { state: GameState }) {
     const svgEl = svgRef.current;
     if (!svgEl) return;
 
-    const svg = d3.select(svgEl);
-    svg.selectAll("*").interrupt();
+    const svg = select(svgEl);
 
     if (!activeEvent || !theme) {
       svg.select("g.event-cells").selectAll("*").remove();
@@ -119,12 +118,6 @@ export function BoardEventOverlay({ state }: { state: GameState }) {
       svg.select("g.event-beacon").selectAll("*").remove();
       return;
     }
-
-    const prefersReducedMotion =
-      typeof window !== "undefined" &&
-      typeof window.matchMedia === "function" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const duration = prefersReducedMotion ? 0 : 200;
 
     const defs = svg.select<SVGDefsElement>("defs");
     defs
@@ -147,18 +140,14 @@ export function BoardEventOverlay({ state }: { state: GameState }) {
         (enter) => {
           const g = enter
             .append("g")
-            .attr("class", "event-cell")
+            .attr("class", "event-cell animate-in fade-in duration-200 motion-reduce:animate-none")
             .attr("data-space-index", (d) => d.index)
-            .attr("opacity", duration === 0 ? 1 : 0);
+            .attr("opacity", 1);
 
           g.append("rect").attr("class", "event-cell-tint");
           g.append("rect").attr("class", "event-cell-pattern");
           g.append("rect").attr("class", "event-cell-frame");
           g.append("polygon").attr("class", "event-cell-marker");
-
-          if (duration > 0) {
-            g.transition().duration(duration).ease(d3.easeCubicOut).attr("opacity", 1);
-          }
           return g;
         },
         (update) => update.attr("data-space-index", (d) => d.index).attr("opacity", 1),
@@ -213,11 +202,10 @@ export function BoardEventOverlay({ state }: { state: GameState }) {
       ? affectedCells.slice(0, -1).map((cell, idx) => [cell, affectedCells[idx + 1]!])
       : [];
 
-    const curveGenerator = d3
-      .line<[number, number]>()
+    const curveGenerator = line<[number, number]>()
       .x((p) => p[0])
       .y((p) => p[1])
-      .curve(d3.curveBasis);
+      .curve(curveBasis);
 
     linksLayer
       .selectAll<SVGPathElement, [BoardCellRect, BoardCellRect]>("path.event-group-link")
@@ -263,10 +251,6 @@ export function BoardEventOverlay({ state }: { state: GameState }) {
       .attr("stroke-width", 5)
       .attr("stroke-opacity", 0.45)
       .attr("stroke-dasharray", "12 8");
-
-    return () => {
-      svg.selectAll("*").interrupt();
-    };
   }, [activeEvent, affectedCells, theme]);
 
   return (
